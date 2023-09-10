@@ -42,12 +42,16 @@ def dmrgci_prep(mc,mol,maxM,hf=None,tol=1E-12):
 def gamma_Gamma_prep(dm1,dm2):
 
     '''
-    Prepare the 1- and 2-RDM. Pyscf returns spin averaged 1RDM
-    Separate the spin-up and spin-down 1RDM
-    Select the relevant part of 2RDM, namely elements where the first (last) two indices correspond to spin up (down)
+    Prepare the 1- and 2-RDM
 
+    Args:
+        dm1 (ndarray): 1RDM from pyscf
+        dm2 (ndarray): 2RDM from pyscf
 
-
+    Returns:
+        gamma(ndarray): prepared 1RDM in spin-orbital indices
+        Gamma(ndarray): prepared 2RDM in orbital indices and spin (up,down,down,up)
+    
     '''
 
     no = len(dm1)
@@ -69,6 +73,30 @@ def gamma_Gamma_prep(dm1,dm2):
 
 
 def qicas(active_indices,inactive_indices,mf,no,n_cas,orbs,ne,mol,N_cycle,bd):
+
+    '''
+    Performs QICAS procedure:
+        1. run DMRG on all orbitals to be optimized
+        2. run orbital optimization
+        3. run CASCI on optimized active space
+
+    Args:
+        active_indices (list): indices of active orbitals
+        inactive_indices (list): indices of inactive orbitals
+        mf: SCF.RHF object
+        no (int): number of orbitals
+        n_cas (int): number of active orbitals
+        orbs (ndarray): initial MO coefficients
+        ne (int): total number of electrons
+        mol: mol object from pyscf
+        N_cycle (int): max number of cycle of jacobi rotations
+        bd (int): max bond dimension in DMRG
+
+    Returns:
+        etot (float): post-QICAS CASCI energy
+        n_closed (int): number of closed orbitals predicted by QICAS
+    
+    '''
 
 
     mc = mcscf.CASCI(mf,no,ne)
