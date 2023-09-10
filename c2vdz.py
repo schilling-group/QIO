@@ -17,7 +17,7 @@ n_cas = 8
 n_should_close = 2
 r = [float(sys.argv[-2])]
 bd = int(sys.argv[-1])
-E = np.zeros((len(r),5))
+E = np.zeros((len(r),4))
 data = np.zeros((len(r),5))
 
 
@@ -41,25 +41,15 @@ for i in range(len(r)):
     print(len(orbs))
     no = len(orbs)-n_core
 
-    
-
-
-    
     t0 = time.time()
-
-
-    
-
-    
 
     active_indices = list(range(n_should_close,n_cas+n_should_close))
     inactive_indices = list(range(n_should_close))+list(range(n_cas+n_should_close,no))
     
-    eicas,eicas2,nclosed,nu,nd = qicas(active_indices = active_indices, inactive_indices = inactive_indices,
-        Nrepeat=1,mf=mf,no=no,n_cas=n_cas,orbs=orbs,ne=ne,mol=mol,N_cycle=200,bd=bd)
-    E[i,1] = eicas
-    E[i,4] = eicas2
-    print(eicas)
+    e_qicas,nclosed = qicas(active_indices = active_indices, inactive_indices = inactive_indices,
+        mf=mf,no=no,n_cas=n_cas,orbs=orbs,ne=ne,mol=mol,N_cycle=200,bd=bd)
+    E[i,1] = e_qicas
+    print(e_qicas)
     
     
     t1 = time.time()
@@ -72,7 +62,6 @@ for i in range(len(r)):
     mol.unit = 'A'
 
     mf = scf.RHF(mol)
-    #mf.diis_start_cycle = 2
     mf.kernel()
 
     

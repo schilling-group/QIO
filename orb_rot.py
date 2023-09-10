@@ -21,6 +21,16 @@ np.set_printoptions(threshold=sys.maxsize)
 
 
 def shannon_entr(spec):
+    '''
+    Shannon entropy of a probability distribution
+
+    Args:
+        spec (ndarray): probability distribution
+    
+    Returns:
+        S (float): Shannon entropy of spec
+
+    '''
     S = 0
     for i in range(len(spec)):
         if spec[i] > 0:
@@ -31,7 +41,22 @@ def shannon_entr(spec):
 
 def jacobi_cost(t,i,j,gamma,Gamma,inactive_indices):
 
-    # Sum of entropy of the (spin) orbitals of the two orbitals under rotation
+    '''
+    Sum of orbital entropy of the two orbitals i and j under one single jacobi rotation with angle t
+
+    Args:
+        t (float): rotational angle
+        i,j (int): orbital indices
+        gamma (ndarray): current 1RDM
+        Gamma (ndarray): current 2RDM
+        inactive_indices (list): indices of inactive orbitals
+
+    Returns:
+        cost_fun (float): S(rho_i) + S(rho_j)
+
+    '''
+
+    
     
     cost_fun = 0
     # two orbital rotation
@@ -50,22 +75,32 @@ def jacobi_cost(t,i,j,gamma,Gamma,inactive_indices):
                 for n in range(2):
                     nu += u1[index,m]*u1[index,n]*gamma[2*indices[m],2*indices[n]]     
                     nd += u1[index,m]*u1[index,n]*gamma[2*indices[m]+1,2*indices[n]+1]
-                    '''
                     for p in range(2):
                         for q in range(2):
                             nn += u1[index,m]*u1[index,n]*u1[index,p]*u1[index,q]*Gamma[indices[m],indices[n],indices[p],indices[q]]
-                    '''
         
-            # compute spin-orbital entropy
-            spec = np.array([1-nu,nu,1-nd,nd]) #np.array([1-nu-nd+nn,nu-nn,nd-nn,nn])
-            cost_fun += 2*shannon_entr(spec)
+            # compute orbital entropy
+            spec = np.array([1-nu-nd+nn,nu-nn,nd-nn,nn])
+            cost_fun += shannon_entr(spec)
             
 
     return cost_fun
 
 def jacobi_cost_full(gamma,Gamma,inactive_indices):
 
-    # This is the sum of entropy of all (spin) orbitals
+    '''
+    Sum of all inactive orbita entropy
+
+    Args:
+        gamma (ndarray): current 1RDM
+        Gamma (ndarray): current 2RDM
+        inactive_indices (list): indices of inactive orbitals
+    
+    Returns:
+        cost_fun (float): S(rho_i) for all i in inactive_indices
+
+    '''
+
 
     
     cost_fun = 0
@@ -76,18 +111,32 @@ def jacobi_cost_full(gamma,Gamma,inactive_indices):
         nd = gamma[2*k+1,2*k+1]
         nn = Gamma[k,k,k,k]
 
-        spec = np.array([1-nu,nu,1-nd,nd])
+        spec = np.array([1-nu-nd+nn,nu-nd,nd-nn,nn])
 
         S1[k] = shannon_entr(spec)
 
 
-    cost_fun = sum(S1)*2
+    cost_fun = sum(S1)
 
     return cost_fun
 
 
 def jacobi_transform(gamma,Gamma,i,j,t):
-    #print('transforming 1 and 2 rdms...')
+
+    '''
+    Perform two-orbital rotation to 1- and 2RDM between orbital i and j by angle t
+
+    Args:
+        gamma (ndarray): current 1RDM
+        Gamma (ndarray): current 2RDM
+        i,j (int): orbital indices
+        t (float): rotational angle
+
+    Returns:
+        gamma_ (ndarray): transformed 1RDM
+        Gamma_ (ndarray): transformed 2RDM
+    '''
+
     no = len(Gamma)
     u1 = np.array([[np.cos(t),np.sin(t)],[-np.sin(t),np.cos(t)]])
     U1 = np.eye(no)
@@ -99,7 +148,7 @@ def jacobi_transform(gamma,Gamma,i,j,t):
     gamma_ = np.zeros((2*no,2*no))
     Gamma_ = np.zeros((no,no,no,no))
 
-    #Gamma_ = np.einsum('ia,jb,kc,ld,abcd->ijkl',U1,U1,U1,U1,Gamma,optimize='optimal')
+    Gamma_ = np.einsum('ia,jb,kc,ld,abcd->ijkl',U1,U1,U1,U1,Gamma,optimize='optimal')
         
     for a in range(no):
         testa = 0
@@ -127,7 +176,22 @@ def jacobi_transform(gamma,Gamma,i,j,t):
     return gamma_, Gamma_
 
 def jacobi_direct(i,j,gamma,Gamma,inactive_indices):
-    # Direct optimization of the two orbital rotation parameters
+    
+    '''
+
+    Optimize a single two-orbital rotation to minimize the sum of entropy of orbital i and j
+
+    Args:
+        i,j (int): orbital indices
+        gamma (ndarray): current 1RDM
+        Gamma (ndarray): current 2RDM
+        inactive_indices (list): indices of inactive orbitals
+
+    Returns:
+        None: if no rotation between orbital i and j can lower the entropy
+        t_opt_new: optimal rotational angle between orbital i and j
+
+    '''
 
     cost = jacobi_cost(0,i,j,gamma,Gamma,inactive_indices)
     test = 0
@@ -157,6 +221,27 @@ def jacobi_direct(i,j,gamma,Gamma,inactive_indices):
 
 def minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,N_cycle):
     
+    '''
+
+    Orbital optimization from initial orbitals to QICAS optimized orbitals
+
+    Args:
+        gamma (ndarray): initial 1RDM
+        Gamma (ndarray): initial 2RDM
+        active_indices (list): active orbital indices
+        inactive_indices (list): inactive orbital indices
+        N_cycle (int): maximal number of cycles of jacobi rotation during orbital optimization
+
+    Returns:
+        rotations (list): history of jacobi rotations (orbital_i, orbital_j, rotational_angle)
+        U (ndarray): unitary that transform the initial orbitals to the QICAS-optimized orbitals
+        gamma (ndarray): transformed 1RDM
+        Gamma (ndarray): transformed 2RDM
+
+    '''
+
+
+
     no = len(Gamma)
     if 0 == 1:
         y = 0
@@ -231,6 +316,25 @@ def minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,N_cycle
 
 
 def reorder(gamma,Gamma,N_cas,inactive_indices):
+
+    '''
+    After orbital rotations, among the inactive orbitals move the orbitals more than 
+    halfly occupied to closed (front of list) and the ones less than halfly occupied 
+    to virtual (back of list)
+
+    Args:
+        gamma (ndarray): initial 1RDM
+        Gamma (ndarray): initial 2RDM
+        N_cas (int): number of active orbitals
+        inactive_indices (list): inactive orbital indices
+
+    Returns:
+        rotations (list): sequence of used rotations
+        n_closed (int): number of closed orbitals predicted by QICAS
+        V (ndarray): permutation matrix that performs the desired reordering 
+
+    '''
+
     test = 1
     #S1 = orb_corr(gamma,Gamma)
     S1 = np.zeros(len(Gamma))
@@ -300,6 +404,19 @@ def reorder(gamma,Gamma,N_cas,inactive_indices):
     return rotations, n_closed, V
 
 def orb_rot_pyscf(orbs,U):
+
+    '''
+    Rotate MO coefficients
+
+    Args:
+        orbs (ndarray): initial MO coefficients (each column is an orbital)
+        U (ndarray): transforming unitary
+
+    Returns:
+        new_orbs (ndarray): transformed MO coefficients
+
+    '''
+
     n = len(U)
     new_orbs = np.zeros((n,n))
     for i in range(n):
