@@ -105,7 +105,7 @@ def qicas(active_indices,inactive_indices,mf,no,n_cas,orbs,ne,mol,N_cycle,bd):
     mc = dmrgci_prep(mc=mc,mol=mol,maxM=bd,tol=1e-5)
     edmrg = mc.kernel(orbs)[0]
     print('DMRG energy:',edmrg)
-    dm1, dm2 = mc.fcisolver.make_rdm12(0,no,ne,spin=False)
+    dm1, dm2 = mc.fcisolver.make_rdm12(0,no,ne)
     print('got rdms...')
     gamma,Gamma = gamma_Gamma_prep(dm1,dm2)
     
