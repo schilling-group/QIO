@@ -99,6 +99,8 @@ def qicas(active_indices,inactive_indices,mf,no,n_cas,orbs,ne,mol,N_cycle,bd):
     '''
 
 
+    # DMRG and RDMs prep block
+
     mc = mcscf.CASCI(mf,no,ne)
     mc = dmrgci_prep(mc=mc,mol=mol,maxM=bd,tol=1e-5)
     edmrg = mc.kernel(orbs)[0]
@@ -108,6 +110,7 @@ def qicas(active_indices,inactive_indices,mf,no,n_cas,orbs,ne,mol,N_cycle,bd):
     gamma,Gamma = gamma_Gamma_prep(dm1,dm2)
     
 
+    # Orbital rotation block
         
     rotations,U,gamma_,Gamma_ = minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,N_cycle)
     rotation2, n_closed, V = reorder(gamma_,Gamma_,n_cas,inactive_indices)
@@ -117,6 +120,8 @@ def qicas(active_indices,inactive_indices,mf,no,n_cas,orbs,ne,mol,N_cycle,bd):
     orbs_ = orb_rot_pyscf(orbs,U_)
 
 
+    # Post-QICAS CASCI block
+    
     mycas = mcscf.CASCI(mf,n_cas,ne-2*n_closed)
     
     mycas.fix_spin_(ss=0)
