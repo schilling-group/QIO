@@ -1,8 +1,8 @@
 from pyscf import gto, scf, dmrgscf, mcscf
 import os,sys,copy
 import numpy as np
-from qicas.tools import *
-from qicas.orb_rot import *
+from qicas import *
+from orb_rot import *
 import time
 
 
@@ -36,8 +36,8 @@ for i in range(len(r)):
     mf = scf.RHF(mol)
     mf.kernel()
     
-    orbs = copy.deepcopy(mf.mo_coeff)
-    no = len(orbs)-n_core
+    mo_coeff = copy.deepcopy(mf.mo_coeff)
+    no = len(mo_coeff)-n_core
 
     t0 = time.time()
 
@@ -45,9 +45,13 @@ for i in range(len(r)):
     
     active_indices = list(range(n_should_close,n_cas+n_should_close))
     inactive_indices = list(range(n_should_close))+list(range(n_cas+n_should_close,no))
-    
-    e_qicas,nclosed = qicas(active_indices = active_indices, inactive_indices = inactive_indices,
-        mf=mf,no=no,n_cas=n_cas,orbs=orbs,ne=ne,mol=mol,N_cycle=200,bd=bd)
+
+    my_qicas = QICAS(mf=mf, mc=None, act_space=None) 
+    my_qicas.max_cycle = 100
+    my_qicas.max_M = bd
+
+    e_qicas,nclosed = my_qicas.kernel(active_indices=active_indices, inactive_indices=inactive_indices,
+        orbs=mo_coeff, ne=ne)
     E[i,1] = e_qicas
     print(e_qicas)
     
