@@ -2,7 +2,7 @@ from pyscf import gto, scf, lib, dmrgscf, mcscf
 import pyscf
 import os
 import numpy as np
-from orb_rot import *
+from qicas.orb_rot import *
 
 
 def dmrgci_prep(mc,mol,maxM,stages=0,hf=None,tol=1E-12):

@@ -1,31 +1,11 @@
 import numpy as np
-from scipy.optimize import Bounds
-import os,sys
-import math
-import itertools as it
 import copy
 import sys
-import scipy
-from scipy.linalg import qr
 from scipy.linalg import expm
-import sklearn.gaussian_process as gp
-from scipy.stats import norm
-from scipy.stats import unitary_group
-from scipy.stats import ortho_group
-from scipy.optimize import minimize
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import ConstantKernel, Matern
-from scipy.optimize import fsolve, root, least_squares, newton, line_search
-import random
+
 np.set_printoptions(threshold=sys.maxsize)
 
 
-def shannon_entr(spec):
-    S = 0
-    for i in range(len(spec)):
-        if spec[i] > 0:
-            S += -spec[i]*np.log(spec[i])
-    return S
 
 
 
@@ -44,7 +24,6 @@ def jacobi_cost(t,i,j,gamma,Gamma,inactive_indices):
             index = 1*(k==j)
             nu = 0
             nd = 0
-            nn = 0
             
             for m in range(2):
                 for n in range(2):
@@ -133,7 +112,7 @@ def jacobi_direct(i,j,gamma,Gamma,inactive_indices):
     test = 0
     grid = 0.01
     t_opt = 0
-    for t in np.arange(grid,math.pi,grid):
+    for t in np.arange(grid, np.pi, grid):
         new_cost = jacobi_cost(t,i,j,gamma,Gamma,inactive_indices)
         if cost > new_cost:
             #test = 1
@@ -215,7 +194,7 @@ def minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,N_cycle
                             advance = cost - new_cost
                             cost = new_cost
                             U = np.matmul(jacobi_step(t,i,j),U)
-                            rotations.append([i+1,j+1,t/math.pi*180])
+                            rotations.append([i+1,j+1,t/np.pi*180])
                             #print(gamma0)
                         
             
@@ -230,7 +209,7 @@ def minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,N_cycle
 
 
 
-def reorder(gamma,Gamma,N_cas,inactive_indices):
+def reorder(gamma,Gamma,N_cas):
     test = 1
     #S1 = orb_corr(gamma,Gamma)
     S1 = np.zeros(len(Gamma))
@@ -300,11 +279,6 @@ def reorder(gamma,Gamma,N_cas,inactive_indices):
     return rotations, n_closed, V
 
 def orb_rot_pyscf(orbs,U):
-    n = len(U)
-    new_orbs = np.zeros((n,n))
-    for i in range(n):
-        for j in range(n):
-            new_orbs[:,i] += U[i,j]*orbs[:,j]
-    return new_orbs
+    return orbs @ U
 
 

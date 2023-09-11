@@ -1,9 +1,8 @@
-from pyscf import gto, scf, lib, dmrgscf, mcscf
-import pyscf
+from pyscf import gto, scf, dmrgscf, mcscf
 import os,sys,copy
 import numpy as np
-from tools import *
-from orb_rot import *
+from qicas.tools import *
+from qicas.orb_rot import *
 import time
 
 
