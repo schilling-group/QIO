@@ -5,7 +5,23 @@ import numpy as np
 from qicas.orb_rot import *
 
 
-def dmrgci_prep(mc,mol,maxM,stages=0,hf=None,tol=1E-12):
+def dmrgci_prep(mc,mol,maxM,hf=None,tol=1E-12):
+
+    '''
+    Prepare a dmrgci object
+
+    Args:
+        mc: a pyscf casci object
+        mol: a pyscf mol object
+        maxM (int): maximal bond dimension
+        stages (int or list): stages specifications [bond_dim, n_sweeps, noise]
+        tol: schedueled tolerance for termination of DMRG sweeps
+
+    Returns:
+        mc: target casci object 
+
+    '''
+
     mc.fcisolver = dmrgscf.DMRGCI(mol, maxM=maxM, tol=tol)
     mc.fcisolver.runtimeDir = lib.param.TMPDIR
     mc.fcisolver.scratchDirectory = lib.param.TMPDIR
@@ -14,25 +30,30 @@ def dmrgci_prep(mc,mol,maxM,stages=0,hf=None,tol=1E-12):
     mc.wfnsym='A1g'
     mc.canonicalization = False
     mc.natorb = False
-    if stages == 1:
-        mc.fcisolver.restart = False
-        mc.fcisolver.scheduleSweeps =[50] 
-        mc.fcisolver.scheduleMaxMs = [maxM] 
-        mc.fcisolver.scheduleTols = [1e-6] 
-        mc.fcisolver.scheduleNoises = [0] 
+    
+    mc.fcisolver.restart = False
+    mc.fcisolver.scheduleSweeps =[50] 
+    mc.fcisolver.scheduleMaxMs = [maxM] 
+    mc.fcisolver.scheduleTols = [1e-6] 
+    mc.fcisolver.scheduleNoises = [0] 
     return mc
 
-def dmrgscf_prep(mol,mf,maxM,nactorb,nactelec):
-    mc = dmrgscf.DMRGSCF(mf=mf, norb=nactorb, nelec=nactelec, maxM=maxM, tol=1E-10)
-    mc.fcisolver.runtimeDir = lib.param.TMPDIR
-    mc.fcisolver.scratchDirectory = lib.param.TMPDIR
-    mc.fcisolver.threads = int(os.environ.get("OMP_NUM_THREADS", 1))
-    mc.fcisolver.memory = int(mol.max_memory / 1000) # mem in GB
-    mc.canonicalization = True
-    mc.natorb = True
-    return mc
 
 def gamma_Gamma_prep(dm1,dm2):
+
+    '''
+    Prepare the 1- and 2-RDM (splitting 1-RDM into spin parts and fix prefactor of 2-RDM)
+
+    Args:
+        dm1 (ndarray): 1RDM from pyscf
+        dm2 (ndarray): 2RDM from pyscf
+
+    Returns:
+        gamma(ndarray): prepared 1RDM in spin-orbital indices
+        Gamma(ndarray): prepared relevant part of the 2RDM in orbital indices and spin (up,down,down,up)
+    
+    '''
+
     no = len(dm1)
 
     Gamma = np.zeros((no,no,no,no))
@@ -51,67 +72,65 @@ def gamma_Gamma_prep(dm1,dm2):
 
 
 
-def qicas(active_indices,inactive_indices,Nrepeat,mf,no,n_cas,orbs,ne,mol,N_cycle,bd):
+def qicas(active_indices,inactive_indices,mf,no,n_cas,orbs,ne,mol,N_cycle,bd):
 
-    emin = 0
-    cost_min = 100
+    '''
+    Performs QICAS procedure:
+        1. run DMRG on all orbitals to be optimized
+        2. run orbital optimization
+        3. run CASCI on optimized active space
+
+    Args:
+        active_indices (list): indices of active orbitals
+        inactive_indices (list): indices of inactive orbitals
+        mf: SCF.RHF object
+        no (int): number of orbitals
+        n_cas (int): number of active orbitals
+        orbs (ndarray): initial MO coefficients
+        ne (int): total number of electrons
+        mol: mol object from pyscf
+        N_cycle (int): max number of cycle of jacobi rotations
+        bd (int): max bond dimension in DMRG
+
+    Returns:
+        etot (float): post-QICAS CASCI energy
+        n_closed (int): number of closed orbitals predicted by QICAS
+    
+    '''
+
+
+    # DMRG and RDMs prep block
+
+    mc = mcscf.CASCI(mf,no,ne)
+    mc = dmrgci_prep(mc=mc,mol=mol,maxM=bd,tol=1e-5)
+    edmrg = mc.kernel(orbs)[0]
+    print('DMRG energy:',edmrg)
+    dm1, dm2 = mc.fcisolver.make_rdm12(0,no,ne,spin=True) # the spin argument requires special modification to the local block2main code
+    print('got rdms...')
+    gamma,Gamma = gamma_Gamma_prep(dm1,dm2)
     
 
-    for n in range(Nrepeat):
-        edmrg = 0
+    # Orbital rotation block
         
-        for k in range(1):
-            mc = mcscf.CASCI(mf,28,12)
-            mc = dmrgci_prep(mc=mc,mol=mol,maxM=bd,stages=1,tol=1e-5)
-            edmrg_ = mc.kernel(orbs)[0]
-            print(edmrg_)
-            if edmrg_ < edmrg:
-                dm1, dm2 = mc.fcisolver.make_rdm12(0,no,ne,spin=True)
-                print('got rdms...')
-                gamma,Gamma = gamma_Gamma_prep(dm1,dm2)
-                g = np.zeros((no,no))
-                for i in range(no):
-                    g[i,i] = gamma[2*i,2*i] + gamma[2*i+1,2*i+1]
-                print(np.diag(g))
-                edmrg = edmrg_
-        
-        
-        
-        for count in range(1):
-            rotations,U,gamma_,Gamma_ = minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,N_cycle)
-            rotation2, n_closed, V = reorder(gamma_,Gamma_,n_cas,inactive_indices)
-            rotations =  rotations + rotation2
-            U_ = np.matmul(V,U)
+    rotations,U,gamma_,Gamma_ = minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,N_cycle)
+    rotation2, n_closed, V = reorder(gamma_,Gamma_,n_cas,inactive_indices)
+    rotations =  rotations + rotation2
+    U_ = np.matmul(V,U)
+
+    orbs_ = orb_rot_pyscf(orbs,U_)
+
+
+    # Post-QICAS CASCI block
     
-            orbs_ = orb_rot_pyscf(orbs,U_)
-
-            nu = int((ne-2*n_closed)/2)
-            nd = int((ne-2*n_closed)/2)
-
-            mycas = mcscf.CASCI(mf,n_cas,ne-2*n_closed)
-            
-            
-        
-            mycas.fix_spin_(ss=0)
-            mycas.canonicalization = True
-            mycas.natorb = True
-            etot = mycas.kernel(orbs_)[0]
-
-        
-        
-            if etot < emin:
-                egrad = emin-etot
-                emin = etot
-                orbs_opt = orbs_
-                n_closed_opt = n_closed
-
-        if egrad < 1e-6:
-            break
+    mycas = mcscf.CASCI(mf,n_cas,ne-2*n_closed)
+    
+    mycas.fix_spin_(ss=0)
+    mycas.canonicalization = True
+    mycas.natorb = True
+    etot = mycas.kernel(orbs_)[0]
         
 
-            
-
-    return emin,etot,n_closed,nu,nd
+    return etot,n_closed
 
 
 
