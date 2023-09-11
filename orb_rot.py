@@ -17,12 +17,8 @@ def shannon_entr(spec):
         S (float): Shannon entropy of spec
 
     '''
-    S = 0
-    for i in range(len(spec)):
-        if spec[i] > 0:
-            S += -spec[i]*np.log(spec[i])
-    return S
-
+    spec = spec[spec > 0]
+    return -np.sum(spec * np.log(spec)) 
 
 
 def jacobi_cost(t,i,j,gamma,Gamma,inactive_indices):
@@ -300,7 +296,7 @@ def minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,N_cycle
 
 
 
-def reorder(gamma,Gamma,N_cas,inactive_indices):
+def reorder(gamma,Gamma,N_cas):
 
     '''
     After orbital rotations, among the inactive orbitals move the orbitals more than 
@@ -401,12 +397,6 @@ def orb_rot_pyscf(orbs,U):
         new_orbs (ndarray): transformed MO coefficients
 
     '''
-
-    n = len(U)
-    new_orbs = np.zeros((n,n))
-    for i in range(n):
-        for j in range(n):
-            new_orbs[:,i] += U[i,j]*orbs[:,j]
-    return new_orbs
+    return orbs @ U
 
 
