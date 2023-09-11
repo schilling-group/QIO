@@ -42,7 +42,7 @@ def dmrgci_prep(mc,mol,maxM,hf=None,tol=1E-12):
 def gamma_Gamma_prep(dm1,dm2):
 
     '''
-    Prepare the 1- and 2-RDM
+    Prepare the 1- and 2-RDM (splitting 1-RDM into spin parts and fix prefactor of 2-RDM)
 
     Args:
         dm1 (ndarray): 1RDM from pyscf
@@ -50,7 +50,7 @@ def gamma_Gamma_prep(dm1,dm2):
 
     Returns:
         gamma(ndarray): prepared 1RDM in spin-orbital indices
-        Gamma(ndarray): prepared 2RDM in orbital indices and spin (up,down,down,up)
+        Gamma(ndarray): prepared relevant part of the 2RDM in orbital indices and spin (up,down,down,up)
     
     '''
 
@@ -105,7 +105,7 @@ def qicas(active_indices,inactive_indices,mf,no,n_cas,orbs,ne,mol,N_cycle,bd):
     mc = dmrgci_prep(mc=mc,mol=mol,maxM=bd,tol=1e-5)
     edmrg = mc.kernel(orbs)[0]
     print('DMRG energy:',edmrg)
-    dm1, dm2 = mc.fcisolver.make_rdm12(0,no,ne)
+    dm1, dm2 = mc.fcisolver.make_rdm12(0,no,ne,spin=True) # the spin argument requires special modification to the local block2main code
     print('got rdms...')
     gamma,Gamma = gamma_Gamma_prep(dm1,dm2)
     
