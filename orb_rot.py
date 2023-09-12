@@ -17,6 +17,7 @@ def shannon_entr(spec):
         S (float): Shannon entropy of spec
     '''
     # FIXME: can spec be negative? if yes, is it ok to just discard the negative part?
+    spec = np.asarray(spec)
     spec = spec[spec > 0]
     return -np.sum(spec * np.log(spec)) 
 
@@ -49,8 +50,9 @@ def jacobi_cost(theta,i,j,rdm1,rdm2,inactive_indices):
     for k in indices:
         if k in inactive_indices:
             index = 1*(k==j)
-            nu = 0
-            nd = 0
+            nu = 0.
+            nd = 0.
+            nn = 0.
             
             for m in range(2):
                 for n in range(2):
@@ -289,7 +291,6 @@ def reorder(gamma,Gamma,N_cas):
         gamma (ndarray): initial 1RDM
         Gamma (ndarray): initial 2RDM
         N_cas (int): number of active orbitals
-        inactive_indices (list): inactive orbital indices
 
     Returns:
         rotations (list): sequence of used rotations

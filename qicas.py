@@ -50,8 +50,8 @@ class QICAS:
 
         # DMRG and RDMs prep block
 
-        mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
-        mc = dmrgci_prep(mc=mc, mol=self.mol, maxM=self.max_M, tol=1e-5)
+        mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
+        mc = dmrgci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
         edmrg = mc.kernel(mo_coeff)[0]
         print('DMRG energy:',edmrg)
         # the spin argument requires special modification to the local block2main code
@@ -62,8 +62,8 @@ class QICAS:
 
         if method == '2d_jacobi':
             # Orbital rotation block
-            rotations,U,gamma_,Gamma_ = minimize_orb_corr_jacobi(gamma,Gamma,active_indices,inactive_indices,self.max_cycle)
-            rotation2, n_closed, V = reorder(gamma_,Gamma_,self.n_cas,inactive_indices)
+            rotations,U,gamma_,Gamma_ = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
+            rotation2, n_closed, V = reorder(gamma_,Gamma_,self.n_cas)
             rotations =  rotations + rotation2
             U_ = np.matmul(V,U)
 
@@ -74,7 +74,7 @@ class QICAS:
 
         # Post-QICAS CASCI block
 
-        mycas = mcscf.CASCI(self.mf,self.n_cas,self.mol.nelectron-2*n_closed)
+        mycas = mcscf.CASCI(self.mf,self.n_cas,self.mf.mol.nelectron-2*n_closed)
 
         mycas.fix_spin_(ss=0)
         mycas.canonicalization = True
