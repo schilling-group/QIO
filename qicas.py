@@ -55,7 +55,8 @@ class QICAS:
         edmrg = mc.kernel(mo_coeff)[0]
         print('DMRG energy:',edmrg)
         # the spin argument requires special modification to the local block2main code
-        dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
+        #dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
+        dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron) 
         print('got rdms...')
         gamma,Gamma = prep_rdm12(dm1,dm2)
 
@@ -67,7 +68,7 @@ class QICAS:
             rotations =  rotations + rotation2
             U_ = np.matmul(V,U)
 
-            orbs_ = mo_coeff @ U_
+            orbs_ = mo_coeff @ U_.T
         else:
             raise NotImplementedError('Only 2d_jacobi is supported')
 
