@@ -215,7 +215,7 @@ def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,N_cycle):
 
 
 
-    no = len(Gamma)
+    no = len(Gamma) 
     gamma0 = copy.deepcopy(gamma) # get_1_pt_rdm_molpro(state,no)
     Gamma0 = copy.deepcopy(Gamma) # get_rel_2_pt_rdm_molpro(state,no)
     

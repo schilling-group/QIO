@@ -58,6 +58,7 @@ class QICAS:
         dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
         print('got rdms...')
         gamma,Gamma = prep_rdm12(dm1,dm2)
+        #gamma,Gamma = spa2spin_rdm12(dm1,dm2)
 
 
         if method == '2d_jacobi':
@@ -135,8 +136,34 @@ def prep_rdm12(dm1, dm2):
     rdm1 = np.zeros((2*no, 2*no))
     rdm1[::2, ::2] = dm1 / 2
     rdm1[1::2, 1::2] = dm1 / 2
-    rdm2 = np.einsum('acdb->abcd', dm2) / 2
-    return rdm1,rdm2 
+    rdm2 = dm2.transpose((0,2,3,1)) / 2.
+    rdm2 = (2 * rdm2 + rdm2.transpose((0, 1, 3, 2))) / 6.
+    rdm2 = rdm2.transpose(0, 3, 1, 2)
+    #for i in range(no):
+    #    rdm2[i, i, i, i] *= 2.
+    #    for j in range(no):
+    #        if i == j:
+    #            continue
+    #        rdm2[i, i, j, j] *= 2.
+    #        for k in range(no):
+    #            rdm2[k, k, i, j] *= 2.
+    #            rdm2[i, j, k, k] *= 2.
+    #mask = np.zeros((no, no, no, no), dtype=bool)
+    #mask[np.arange(no),  np.arange(no), :, :] = True
+    #rdm2[mask] *= 2.
+    #mask = np.zeros((no, no, no, no), dtype=bool)
+    #mask[:, :, np.arange(no), np.arange(no)] = True
+    #rdm2[mask] *= 2.
+    ## for ppss block 
+    #for i in np.arange(no):
+    #    mask = np.zeros((no, no, no, no), dtype=bool)
+    #    mask[i, i, np.arange(no), np.arange(no)] = True
+    #    rdm2[mask] /= 2.
+    #mask = np.zeros((no, no, no, no), dtype=bool)
+    #mask[np.arange(no), np.arange(no), np.arange(no), np.arange(no)] = True
+    #rdm2[mask] *= 2.
+
+    return rdm1,rdm2
 
 
 
