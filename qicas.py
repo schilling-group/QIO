@@ -100,7 +100,7 @@ def dmrgci_prep(mc, mol, maxM, tol=1E-12):
         mc: target casci object 
 
     '''
-
+    print("Using dmrg from ", dmrgscf.__file__)
     mc.fcisolver = dmrgscf.DMRGCI(mol, maxM=maxM, tol=tol)
     mc.fcisolver.runtimeDir = lib.param.TMPDIR
     mc.fcisolver.scratchDirectory = lib.param.TMPDIR
@@ -138,9 +138,8 @@ def prep_rdm12(dm1, dm2):
     rdm1 = np.zeros((2*no, 2*no))
     rdm1[::2, ::2] = dm1 / 2
     rdm1[1::2, 1::2] = dm1 / 2
-    rdm2 = dm2.transpose((0,2,3,1)) 
+    rdm2 = dm2.transpose((0,2,3,1)).copy()
     rdm2 = (2 * rdm2 + rdm2.transpose((0, 1, 3, 2))) / 6.
-    rdm2 = rdm2.transpose(0, 1, 3, 2)
 
     return rdm1,rdm2
 
