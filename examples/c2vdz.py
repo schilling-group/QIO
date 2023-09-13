@@ -19,7 +19,7 @@ n_should_close = 2            # target number of closed orbitals
 r = [1.2] 
 bd = 100
 E = np.zeros((len(r),4))      # array of output data
-
+basis = 'sto6g'               # basis set
 
 
 for i in range(len(r)):
@@ -29,7 +29,7 @@ for i in range(len(r)):
     # create molecule with desired geometry and basis
 
     mol = gto.M(atom='C 0 0 0; C 0 0 '+"{:.4}".format(r[i]), 
-        basis='sto6g',spin=0, verbose=1, 
+        basis=basis,spin=0, verbose=1, 
         max_memory=50000,symmetry = False) # mem in MB
     mol.unit = 'A'
 
@@ -66,7 +66,7 @@ for i in range(len(r)):
     # The following code runs a HF-CASSCF and HF-CASCI from sratch for comparison
     
     mol = gto.M(atom='C 0 0 0; C 0 0 '+"{:.4}".format(r[i]), 
-        basis='ccpvdz',spin=0, verbose=1, 
+        basis=basis,spin=0, verbose=1, 
         max_memory=50000,symmetry = False) # mem in MB
     mol.unit = 'A'
 

@@ -122,6 +122,9 @@ def dmrgci_prep(mc, mol, maxM, tol=1E-12):
 def prep_rdm12(dm1, dm2):
     '''
     Prepare the 1- and 2-RDM (splitting 1-RDM into spin parts and fix prefactor of 2-RDM)
+    This only works for singlet states.
+    For other spin states, one should run spin unrestricted DMRG and get the 
+    spin 1- and 2-RDMs.
 
     Args:
         dm1 (ndarray): spatial-orbital 1RDM from pyscf
@@ -135,32 +138,9 @@ def prep_rdm12(dm1, dm2):
     rdm1 = np.zeros((2*no, 2*no))
     rdm1[::2, ::2] = dm1 / 2
     rdm1[1::2, 1::2] = dm1 / 2
-    rdm2 = dm2.transpose((0,2,3,1)) / 2.
+    rdm2 = dm2.transpose((0,2,3,1)) 
     rdm2 = (2 * rdm2 + rdm2.transpose((0, 1, 3, 2))) / 6.
-    rdm2 = rdm2.transpose(0, 3, 1, 2)
-    #for i in range(no):
-    #    rdm2[i, i, i, i] *= 2.
-    #    for j in range(no):
-    #        if i == j:
-    #            continue
-    #        rdm2[i, i, j, j] *= 2.
-    #        for k in range(no):
-    #            rdm2[k, k, i, j] *= 2.
-    #            rdm2[i, j, k, k] *= 2.
-    #mask = np.zeros((no, no, no, no), dtype=bool)
-    #mask[np.arange(no),  np.arange(no), :, :] = True
-    #rdm2[mask] *= 2.
-    #mask = np.zeros((no, no, no, no), dtype=bool)
-    #mask[:, :, np.arange(no), np.arange(no)] = True
-    #rdm2[mask] *= 2.
-    ## for ppss block 
-    #for i in np.arange(no):
-    #    mask = np.zeros((no, no, no, no), dtype=bool)
-    #    mask[i, i, np.arange(no), np.arange(no)] = True
-    #    rdm2[mask] /= 2.
-    #mask = np.zeros((no, no, no, no), dtype=bool)
-    #mask[np.arange(no), np.arange(no), np.arange(no), np.arange(no)] = True
-    #rdm2[mask] *= 2.
+    rdm2 = rdm2.transpose(0, 1, 3, 2)
 
     return rdm1,rdm2
 
