@@ -58,7 +58,6 @@ class QICAS:
         dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
         print('got rdms...')
         gamma,Gamma = prep_rdm12(dm1,dm2)
-        #gamma,Gamma = spa2spin_rdm12(dm1,dm2)
 
 
         if method == '2d_jacobi':

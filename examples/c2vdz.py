@@ -16,8 +16,8 @@ n_cas = 8                     # number of active orbitals
 n_should_close = 2            # target number of closed orbitals
 # r = [float(sys.argv[-2])]     # list of geometry parameters
 # bd = int(sys.argv[-1])        # max bond dimension for DMRG
-r = [2.0] 
-bd = 200
+r = [1.2] 
+bd = 100
 E = np.zeros((len(r),4))      # array of output data
 
 
