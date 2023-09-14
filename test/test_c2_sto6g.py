@@ -40,3 +40,4 @@ def test_energy():
         mo_coeff=mo_coeff)
     
     assert np.isclose(e_qicas, -75.427831, atol=1e-5)
+

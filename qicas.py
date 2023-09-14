@@ -1,8 +1,9 @@
-from pyscf import lib, dmrgscf, mcscf
+from pyscf import lib, dmrgscf, mcscf, cc
 from pyscf.mcscf import casci
 import os
 import numpy as np
 from orb_rot import *
+from tccsd import make_tailored_ccsd
 
 
 class QICAS:
@@ -16,6 +17,10 @@ class QICAS:
             no (int): number of non-frozen orbitals
             max_cycle (int): max number of cycle of jacobi rotations
             max_M (int): max bond dimension in DMRG
+        
+        Saved results:
+            gamma (ndarray): optimized 1-RDM in spatial-orbital indices
+            Gamma (ndarray): optimized 2-RDM in spatial-orbital indices
         """
         self.mf = mf
         self.no = len(mf.mo_coeff)
@@ -25,7 +30,7 @@ class QICAS:
         # max bond dimension in DMRG
         self.max_M = 200
 
-    def kernel(self, active_indices, inactive_indices, mo_coeff, method='2d_jacobi'):
+    def kernel(self, inactive_indices, mo_coeff, is_tcc=False, method='2d_jacobi'):
 
         '''
         Performs QICAS procedure:
@@ -38,6 +43,7 @@ class QICAS:
             inactive_indices (list): indices of inactive orbitals
             no (int): number of non-frozen orbitals
             max_cycle (int): max number of cycle of jacobi rotations
+            is_tcc (bool): whether to use tailored CCSD solver to obtain rdm1 and rdm2
             method (str): method of orbital optimization, currently only '2d_jacobi' is supported
                 in the future we will add 'gradient_descent'
 
@@ -46,25 +52,40 @@ class QICAS:
             n_closed (int): number of closed orbitals predicted by QICAS
 
         '''
+        if mo_coeff is None:
+            mo_coeff = self.mf.mo_coeff
 
+        if is_tcc:
+            # using TCCSD to get initial RDM1 and RDM2
+            tcc = cc.CCSD(self.mf)
+            mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
+            #mc = fci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
+            mc.kernel(mo_coeff)
+            print('CASCI energy:',mc.e_tot)
+            tcc = make_tailored_ccsd(tcc, mc)
+            tcc.verbose = 4
+            tcc.max_cycle = 1
+            tcc.kernel()
+            print('TCCSD energy:',tcc.e_tot)
+            dm1 = tcc.make_rdm1()
+            dm2 = tcc.make_rdm2()
+        else:
+            # DMRG and RDMs prep block
+            mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
+            mc = dmrgci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
+            edmrg = mc.kernel(mo_coeff)[0]
+            print('DMRG energy:',edmrg)
+            # the spin argument requires special modification to the local block2main code
+            #dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
+            dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron) 
 
-        # DMRG and RDMs prep block
-
-        mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
-        mc = dmrgci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
-        edmrg = mc.kernel(mo_coeff)[0]
-        print('DMRG energy:',edmrg)
-        # the spin argument requires special modification to the local block2main code
-        #dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
-        dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron) 
-        print('got rdms...')
         gamma,Gamma = prep_rdm12(dm1,dm2)
 
 
         if method == '2d_jacobi':
             # Orbital rotation block
-            rotations,U,gamma_,Gamma_ = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
-            rotation2, n_closed, V = reorder(gamma_,Gamma_,self.n_cas)
+            rotations,U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
+            rotation2, n_closed, V = reorder(self.gamma,self.Gamma,self.n_cas)
             rotations =  rotations + rotation2
             U_ = np.matmul(V,U)
 
@@ -84,6 +105,7 @@ class QICAS:
 
 
         return etot,n_closed
+
 
 def dmrgci_prep(mc, mol, maxM, tol=1E-12):
 
