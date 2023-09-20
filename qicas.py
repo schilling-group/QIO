@@ -19,6 +19,7 @@ class QICAS:
             max_M (int): max bond dimension in DMRG
         
         Saved results:
+            mo_coeff (ndarray): optimized orbitals in spatial-orbital indices
             gamma (ndarray): optimized 1-RDM in spatial-orbital indices
             Gamma (ndarray): optimized 2-RDM in spatial-orbital indices
         """
@@ -64,7 +65,8 @@ class QICAS:
             print('CASCI energy:',mc.e_tot)
             tcc = make_tailored_ccsd(tcc, mc)
             tcc.verbose = 4
-            tcc.max_cycle = 1
+            tcc.max_cycle = 5
+            tcc.level_shift = 0.1
             tcc.kernel()
             print('TCCSD energy:',tcc.e_tot)
             dm1 = tcc.make_rdm1()
@@ -85,11 +87,11 @@ class QICAS:
         if method == '2d_jacobi':
             # Orbital rotation block
             rotations,U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
-            rotation2, n_closed, V = reorder(self.gamma,self.Gamma,self.n_cas)
+            rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
             rotations =  rotations + rotation2
             U_ = np.matmul(V,U)
 
-            orbs_ = mo_coeff @ U_.T
+            self.mo_coeff = mo_coeff @ U_.T
         else:
             raise NotImplementedError('Only 2d_jacobi is supported')
 
@@ -101,7 +103,7 @@ class QICAS:
         mycas.fix_spin_(ss=0)
         mycas.canonicalization = True
         mycas.natorb = True
-        etot = mycas.kernel(orbs_)[0]
+        etot = mycas.kernel(self.mo_coeff)[0]
 
 
         return etot,n_closed
@@ -127,7 +129,7 @@ def dmrgci_prep(mc, mol, maxM, tol=1E-12):
     mc.fcisolver = dmrgscf.DMRGCI(mol, maxM=maxM, tol=tol)
     mc.fcisolver.runtimeDir = lib.param.TMPDIR
     mc.fcisolver.scratchDirectory = lib.param.TMPDIR
-    mc.fcisolver.threads = int(os.environ.get("OMP_NUM_THREADS", 1))
+    mc.fcisolver.threads = int(os.environ.get("OMP_NUM_THREADS", 4))
     mc.fcisolver.memory = int(mol.max_memory / 1000) # mem in GB
     mc.wfnsym='A1g'
     mc.canonicalization = False

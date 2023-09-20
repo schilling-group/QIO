@@ -57,7 +57,7 @@ for basis in ['ccpvdz']:
     etot = mycas.kernel(mf.mo_coeff)[0]
     E[2] = etot
 
-    for bd in [400, 600, 800]:
+    for bd in [100]:
         print(' bd =', bd)
 
         # create molecule with desired geometry and basis
@@ -93,6 +93,7 @@ for basis in ['ccpvdz']:
 
         np.save('rdm1_'+basis+'_'+str(bd)+'.npy', my_qicas.gamma)
         np.save('rdm2_'+basis+'_'+str(bd)+'.npy', my_qicas.Gamma)
+        np.save('mo_coeff_'+basis+'_'+str(bd)+'.npy', my_qicas.mo_coeff)
         t1 = time.time()
         print('icas time:',t1-t0)
 
@@ -101,23 +102,23 @@ for basis in ['ccpvdz']:
         cost_list = []
         energy_list = []
         mf_mo_coeff = copy.deepcopy(mf.mo_coeff)
-        for n in range(10):
-            print("Generating random unitary", n)
-            X = (np.random.rand(no,no)/2-1)/1/(1+49*np.random.rand())
-            #X = (np.random.rand(no,no)/2-1)*2*np.pi/50
-            X = X - X.T
-            U = expm(X)
-            U_ = np.kron(U,np.eye(2))
-            gamma = np.einsum('ia,jb,ab->ij',U_,U_, my_qicas.gamma,optimize='optimal')
-            Gamma = np.einsum('ia,jb,kc,ld,abcd->ijkl',U,U,U,U,my_qicas.Gamma,optimize='optimal')
-            cost = jacobi_cost_full(gamma, Gamma, inactive_indices)
-            cost_list.append(cost)
-            mo_coeff = mf_mo_coeff @ U.T
-            ecasci = get_casci_energy(mo_coeff, n_cas, ne-2*n_should_close, r)
-            energy_list.append(ecasci)
-            print("Cost:", cost)
-            print("Energy:", ecasci)
-        np.save('cost_list_'+basis+'_'+str(bd)+'.npy', np.asarray([cost_list, energy_list]))
+        #for n in range(10):
+        #    print("Generating random unitary", n)
+        #    X = (np.random.rand(no,no)/2-1)/1/(1+49*np.random.rand())
+        #    #X = (np.random.rand(no,no)/2-1)*2*np.pi/50
+        #    X = X - X.T
+        #    U = expm(X)
+        #    U_ = np.kron(U,np.eye(2))
+        #    gamma = np.einsum('ia,jb,ab->ij',U_,U_, my_qicas.gamma,optimize='optimal')
+        #    Gamma = np.einsum('ia,jb,kc,ld,abcd->ijkl',U,U,U,U,my_qicas.Gamma,optimize='optimal')
+        #    cost = jacobi_cost_full(gamma, Gamma, inactive_indices)
+        #    cost_list.append(cost)
+        #    mo_coeff = mf_mo_coeff @ U.T
+        #    ecasci = get_casci_energy(mo_coeff, n_cas, ne-2*n_should_close, r)
+        #    energy_list.append(ecasci)
+        #    print("Cost:", cost)
+        #    print("Energy:", ecasci)
+        #np.save('cost_list_'+basis+'_'+str(bd)+'.npy', np.asarray([cost_list, energy_list]))
 
 
         # The following code runs a HF-CASSCF and HF-CASCI from sratch for comparison
