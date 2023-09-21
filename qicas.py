@@ -61,12 +61,13 @@ class QICAS:
             tcc = cc.CCSD(self.mf)
             mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
             #mc = fci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
+            mc.verbose = 4
             mc.kernel(mo_coeff)
             print('CASCI energy:',mc.e_tot)
             tcc = make_tailored_ccsd(tcc, mc)
             tcc.verbose = 4
-            tcc.max_cycle = 5
-            tcc.level_shift = 0.1
+            tcc.max_cycle = 100
+            tcc.level_shift = 0.5
             tcc.kernel()
             print('TCCSD energy:',tcc.e_tot)
             dm1 = tcc.make_rdm1()
