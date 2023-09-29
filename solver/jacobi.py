@@ -3,23 +3,10 @@ import copy
 import sys
 from scipy.linalg import expm
 
+from entropy import shannon
+
 np.set_printoptions(threshold=sys.maxsize)
 
-
-def shannon_entr(spec):
-    '''
-    Shannon entropy of a probability distribution
-
-    Args:
-        spec (ndarray): probability distribution
-    
-    Returns:
-        S (float): Shannon entropy of spec
-    '''
-    # FIXME: can spec be negative? if yes, is it ok to just discard the negative part?
-    spec = np.asarray(spec)
-    spec = spec[spec > 0]
-    return -np.sum(spec * np.log(spec)) 
 
 
 def jacobi_cost(theta,i,j,rdm1,rdm2,inactive_indices):
@@ -64,35 +51,11 @@ def jacobi_cost(theta,i,j,rdm1,rdm2,inactive_indices):
         
             # compute orbital entropy
             spec = np.array([1-nu-nd+nn,nu-nn,nd-nn,nn])
-            cost_fun += shannon_entr(spec)
+            cost_fun += shannon(spec)
             
 
     return cost_fun
 
-def jacobi_cost_full(gamma,Gamma,inactive_indices):
-
-    '''
-    Sum of all inactive orbita entropy
-
-    Args:
-        gamma (ndarray): current 1RDM
-        Gamma (ndarray): current 2RDM
-        inactive_indices (list): indices of inactive orbitals
-    
-    Returns:
-        cost_fun (float): S(rho_i) for all i in inactive_indices
-
-    '''
-
-
-    inds = np.asarray(inactive_indices) 
-    nu = gamma[2*inds, 2*inds]
-    nd = gamma[2*inds+1, 2*inds+1]
-    nn = Gamma[inds, inds, inds, inds]
-    spec = np.array([1-nu-nd+nn, nu-nd, nd-nn, nn])
-    spec = np.clip(spec, a_min=1e-15, a_max=None)
-    cost_fun = -np.sum(spec * np.log(spec), axis=0)
-    return np.sum(cost_fun)
 
 def jacobi_transform(gamma,Gamma,i,j,t):
 
@@ -307,7 +270,7 @@ def reorder(gamma,Gamma,N_cas):
         nd = gamma[2*i+1,2*i+1]
         N1[i] = nu + nd
         spec = [1-nu,nu,1-nd,nd]
-        S1[i] = shannon_entr(spec)
+        S1[i] = shannon(spec)
     #print(S1,N1)
     rotations = []
     no = len(S1)

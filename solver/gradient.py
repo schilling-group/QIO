@@ -2,7 +2,7 @@ import numpy as np
 import sys
 from scipy.linalg import expm
 
-from solver.jacobi import shannon_entr
+from entropy import get_cost_fqi
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -131,25 +131,11 @@ def FQI_hess(gamma,Gamma,inactive_indices):
     return ddX + ddX.T
 
 def FQI_display(gamma,Gamma,inactive_indices,verbose=True):
-    no = len(Gamma)
-    S = np.zeros(no)
-    for k in inactive_indices:
-        spec = np.array([1-gamma[2*k,2*k]-gamma[2*k+1,2*k+1]+Gamma[k,k,k,k],
-            gamma[2*k,2*k]-Gamma[k,k,k,k],
-            gamma[2*k+1,2*k+1]-Gamma[k,k,k,k],
-            Gamma[k,k,k,k]])
-        S[k] = shannon_entr(spec)
-        #S[i] = 1-np.dot(spec,spec)
-    
+    cost_ = get_cost_fqi(gamma, Gamma, inactive_indices)
+    print('FQI cost: ', cost_)
 
-    if verbose == True:
-        print('FQI =',sum(S))
-    return sum(S)
+    return cost_
             
-
-
-
-
 
 def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices):
     

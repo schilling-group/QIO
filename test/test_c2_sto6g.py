@@ -1,6 +1,3 @@
-import sys
-sys.path.append('../')
-
 from pyscf import gto, scf
 from qicas import *
 
@@ -26,7 +23,7 @@ def test_energy():
     mf = scf.RHF(mol)
     mf.kernel()
     
-    mo_coeff = copy.deepcopy(mf.mo_coeff)
+    mo_coeff = mf.mo_coeff.copy()
     no = len(mo_coeff)-n_core
 
 

@@ -1,10 +1,9 @@
 import sys
-sys.path.append('../')
 
 import numpy as np
 from qicas import prep_rdm12
 from old_code.tools import gamma_Gamma_prep
-from solver.jacobi import jacobi_cost_full
+from solver.jacobi import cost_full
 
 def prep_rand_rdm12(no=5):
     dm1 = np.random.rand(no,no)
@@ -32,7 +31,7 @@ def test_jacobi_cost_full():
     inds = np.array(inactive_indices)
     dm1, dm2 = prep_rand_rdm12(no=5)
     rdm1, rdm2 = prep_rdm12(dm1, dm2)
-    cost_old = jacobi_cost_full(rdm1, rdm2, inactive_indices)
+    cost_old = cost_full(rdm1, rdm2, inactive_indices)
 
     def jacobi_cost_full_new(gamma, Gamma, inds):
         
