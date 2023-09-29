@@ -8,7 +8,7 @@ import pyscf
 import pyscf.gto
 import pyscf.scf
 import pyscf.cc
-import pyscf.ci
+from pyscf.ci import cisd
 import pyscf.mcscf
 from pyscf.mp.mp2 import _mo_without_core
 
@@ -58,5 +58,27 @@ def make_tailored_ccsd(cc, cas):
         t1 += dt1
         t2 += dt2
 
+    def make_rdm1():
+        """Make 1-RDM using C1 and C2 from CCSD"""
+        t1, t2 = cc.t1, cc.t2
+        c0 = 1.
+        c1 = t1
+        c2 = t2 + einsum('ia,jb->ijab', t1, t1) 
+        mycisd = cisd.CISD(cc._scf)
+        cisdvec = pyscf.ci.cisd.amplitudes_to_cisdvec(c0, c1, c2)
+        return mycisd.make_rdm1(cisdvec)
+
+    def make_rdm2():
+        """Make 2-RDM using C1 and C2 from CCSD"""
+        t1, t2 = cc.t1, cc.t2
+        c0 = 1.
+        c1 = t1
+        c2 = t2 + einsum('ia,jb->ijab', t1, t1) 
+        mycisd = cisd.CISD(cc._scf)
+        cisdvec = pyscf.ci.cisd.amplitudes_to_cisdvec(c0, c1, c2)
+        return mycisd.make_rdm2(cisdvec)
+
     cc.callback = callback
+    #cc.make_rdm1 = make_rdm1
+    #cc.make_rdm2 = make_rdm2
     return cc

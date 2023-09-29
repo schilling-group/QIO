@@ -16,9 +16,14 @@ def shannon_entr(spec):
     Returns:
         S (float): Shannon entropy of spec
     '''
-    # FIXME: can spec be negative? if yes, is it ok to just discard the negative part?
     spec = np.asarray(spec)
-    spec = spec[spec > 0]
+    #spec = spec[spec > 0]
+    #spec = spec[spec <= 1]
+    if any(spec > 1):
+        print("Warning: occupation number {0} larger than 1".format(spec[spec > 1]))
+    elif any(spec < 0):
+        print("Warning: occupation number {0} smaller than 0".format(spec[spec < 0]))
+    # FIXME: can spec be negative? if yes, is it ok to just discard the negative part?
     return -np.sum(spec * np.log(spec)) 
 
 

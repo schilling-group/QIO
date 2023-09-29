@@ -1,5 +1,4 @@
 from pyscf import lib, dmrgscf, mcscf, cc
-from pyscf.mcscf import casci
 import os
 import numpy as np
 from orb_rot import *
@@ -58,20 +57,27 @@ class QICAS:
 
         if is_tcc:
             # using TCCSD to get initial RDM1 and RDM2
-            tcc = cc.CCSD(self.mf)
+            tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
             mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
             #mc = fci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
             mc.verbose = 4
-            mc.kernel(mo_coeff)
+            mc.fix_spin_(ss=0)
+            mc.natorb = True
+            mc.kernel(mo_coeff.copy())
+            print("mo_energy ", mc.mo_energy)
+
             print('CASCI energy:',mc.e_tot)
             tcc = make_tailored_ccsd(tcc, mc)
             tcc.verbose = 4
             tcc.max_cycle = 100
-            tcc.level_shift = 0.5
+            tcc.level_shift = 0.1
             tcc.kernel()
             print('TCCSD energy:',tcc.e_tot)
             dm1 = tcc.make_rdm1()
+            assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
             dm2 = tcc.make_rdm2()
+            assert np.isclose(np.einsum('iijj->', dm2), self.mf.mol.nelectron*(self.mf.mol.nelectron-1), atol=1e-6)
+
         else:
             # DMRG and RDMs prep block
             mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
@@ -81,6 +87,8 @@ class QICAS:
             # the spin argument requires special modification to the local block2main code
             #dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
             dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron) 
+            assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
+            assert np.isclose(np.einsum('iijj->', dm2), self.mf.mol.nelectron*(self.mf.mol.nelectron-1), atol=1e-6)
 
         gamma,Gamma = prep_rdm12(dm1,dm2)
 
@@ -96,14 +104,17 @@ class QICAS:
         else:
             raise NotImplementedError('Only 2d_jacobi is supported')
 
-
+        n_closed_init = (self.mf.mol.nelectron - self.n_act_e) // 2
+        if n_closed != n_closed_init:
+            raise ValueError("Number of closed orbitals predicted by QICAS is different from the number of inactive orbitals")
         # Post-QICAS CASCI block
 
         mycas = mcscf.CASCI(self.mf,self.n_cas,self.mf.mol.nelectron-2*n_closed)
 
         mycas.fix_spin_(ss=0)
-        mycas.canonicalization = True
+        #mycas.canonicalization = True
         mycas.natorb = True
+        mycas.verbose = 4
         etot = mycas.kernel(self.mo_coeff)[0]
 
 

@@ -29,7 +29,7 @@ n_should_close = 2            # target number of closed orbitals
 r = 1.243
 
 #for basis in ['sto6g', 'ccpvdz', 'ccpvtz']:
-for basis in ['ccpvdz']:
+for basis in ['ccpvtz']:
     mol = gto.M(atom='C 0 0 0; C 0 0 '+"{:.4}".format(r), 
             basis=basis,spin=0, verbose=1, 
             max_memory=50000,symmetry = False)
@@ -47,6 +47,7 @@ for basis in ['ccpvdz']:
     mf.kernel()
     mo_coeff = mf.mo_coeff.copy()
     no = len(mo_coeff)-n_core
+    print("no:", no)
 
     active_indices = list(range(n_should_close,n_cas+n_should_close))
     inactive_indices = list(range(n_should_close))+list(range(n_cas+n_should_close,no))
@@ -73,6 +74,7 @@ for basis in ['ccpvdz']:
 
         mo_coeff = copy.deepcopy(mf.mo_coeff)
         no = len(mo_coeff)-n_core
+        print("no:", no)
 
         t0 = time.time()
 
@@ -84,8 +86,8 @@ for basis in ['ccpvdz']:
         energy_list = []
         for n in range(500):
             print("Generating random unitary", n)
-            #X = (np.random.random((no,no))/2-1)/1/(1+200*np.random.rand())
-            X = (np.random.random((no,no))/2-1)*2*np.pi/10
+            X = (np.random.random((no,no))/2-1)/1/(1+200*np.random.rand())
+            #X = (np.random.random((no,no))/2-1)*2*np.pi/10
             #X = np.zeros((no,no))
             X = X - X.T
             U = expm(X)
