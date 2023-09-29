@@ -1,3 +1,6 @@
+import sys
+sys.path.append('../')
+
 import numpy as np
 from pyscf import gto, scf, cc, mcscf
 from tccsd import make_tailored_ccsd
