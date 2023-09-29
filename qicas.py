@@ -1,7 +1,8 @@
 from pyscf import lib, dmrgscf, mcscf, cc
 import os
 import numpy as np
-from orb_rot import *
+from solver.jacobi import *
+from solver.gradient import *
 from tccsd import make_tailored_ccsd
 
 
@@ -30,7 +31,7 @@ class QICAS:
         # max bond dimension in DMRG
         self.max_M = 200
 
-    def kernel(self, inactive_indices, mo_coeff, is_tcc=False, method='2d_jacobi'):
+    def kernel(self, inactive_indices, mo_coeff, is_tcc=False, method='newton-raphson'):
 
         '''
         Performs QICAS procedure:
@@ -99,10 +100,14 @@ class QICAS:
             rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
             rotations =  rotations + rotation2
             U_ = np.matmul(V,U)
-
+            self.mo_coeff = mo_coeff @ U_.T
+        elif method == 'newton-raphson':
+            U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices)
+            rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
+            U_ = np.matmul(V,U)
             self.mo_coeff = mo_coeff @ U_.T
         else:
-            raise NotImplementedError('Only 2d_jacobi is supported')
+            raise NotImplementedError('Only 2d_jacobi and newton-raphson is supported')
 
         n_closed_init = (self.mf.mol.nelectron - self.n_act_e) // 2
         if n_closed != n_closed_init:

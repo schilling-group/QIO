@@ -1,7 +1,10 @@
+import sys
+sys.path.append('../')
+
 import numpy as np
 from qicas import prep_rdm12
 from old_code.tools import gamma_Gamma_prep
-from orb_rot import jacobi_cost_full
+from solver.jacobi import jacobi_cost_full
 
 def prep_rand_rdm12(no=5):
     dm1 = np.random.rand(no,no)

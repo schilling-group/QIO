@@ -1,3 +1,6 @@
+import sys
+sys.path.append('../')
+
 from pyscf import gto, scf
 from qicas import *
 
