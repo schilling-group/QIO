@@ -102,7 +102,7 @@ class QICAS:
             U_ = np.matmul(V,U)
             self.mo_coeff = mo_coeff @ U_.T
         elif method == 'newton-raphson':
-            U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices)
+            U,self.gamma,self.Gamma = minimize_orb_corr_GD(gamma,Gamma,inactive_indices)
             rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
             U_ = np.matmul(V,U)
             self.mo_coeff = mo_coeff @ U_.T
