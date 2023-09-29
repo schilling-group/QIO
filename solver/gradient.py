@@ -1,39 +1,10 @@
 import numpy as np
-from scipy.optimize import Bounds
-import os,sys
-import math
-import itertools as it
-import copy
 import sys
-import scipy
-from scipy.linalg import qr
 from scipy.linalg import expm
-import sklearn.gaussian_process as gp
-from scipy.stats import norm
-from scipy.stats import unitary_group
-from scipy.stats import ortho_group
-from scipy.optimize import minimize
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import ConstantKernel, Matern
-from scipy.optimize import fsolve, root, least_squares, newton, line_search
-import random
+
+from solver.jacobi import shannon_entr
+
 np.set_printoptions(threshold=sys.maxsize)
-
-
-def shannon_entr(spec):
-    '''
-    Shannon entropy of a probability distribution
-
-    Args:
-        spec (ndarray): probability distribution
-    
-    Returns:
-        S (float): Shannon entropy of spec
-    '''
-    S = 0
-    spec = np.array(spec[spec>0])
-    
-    return -np.dot(spec,np.log(spec))
 
 
 def gamma_grad_diag(gamma,i,j):
@@ -232,95 +203,3 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices):
             FQI_display(gamma0,Gamma0,inactive_indices)
 
     return U_tot, gamma0, Gamma0
-
-
-
-
-def reorder(gamma,Gamma,N_cas,inactive_indices):
-
-    '''
-    After orbital rotations, among the inactive orbitals move the orbitals more than 
-    halfly occupied to closed (front of list) and the ones less than halfly occupied 
-    to virtual (back of list)
-
-    Args:
-        gamma (ndarray): initial 1RDM
-        Gamma (ndarray): initial 2RDM
-        N_cas (int): number of active orbitals
-        inactive_indices (list): inactive orbital indices
-
-    Returns:
-        rotations (list): sequence of used rotations
-        n_closed (int): number of closed orbitals predicted by QICAS
-        V (ndarray): permutation matrix that performs the desired reordering 
-
-    '''
-
-    test = 1
-    #S1 = orb_corr(gamma,Gamma)
-    S1 = np.zeros(len(Gamma))
-    N1 = np.zeros(len(Gamma))
-    for i in range(len(Gamma)):
-        nu = gamma[2*i,2*i]
-        nd = gamma[2*i+1,2*i+1]
-        N1[i] = nu + nd
-        spec = [1-nu,nu,1-nd,nd]
-        S1[i] = shannon_entr(spec)
-    #print(S1,N1)
-    rotations = []
-    no = len(S1)
-    V = np.eye(no)
-    
-    while test == 1:
-        test = 0
-        for i in range(len(S1)-1):
-            if S1[i] < S1[i+1]:
-                test = 1
-
-                c = S1[i]
-                S1[i] = S1[i+1]
-                S1[i+1] = c
-
-
-                c = N1[i]
-                N1[i] = N1[i+1]
-                N1[i+1] = c
-
-                rotations = rotations + [[i+1,i+2,0]]
-                V_ = np.eye(no)
-                V_[i,i] = 0
-                V_[i+1,i+1] = 0
-                V_[i,i+1] = 1
-                V_[i+1,i] = 1
-                V = np.matmul(V_,V)
-    
-    
-    n_closed = 0
-    for j in range(N_cas,len(S1)):
-        if N1[j] > 1:
-            n_closed += 1
-            for i in range(j):
-                #print(i)
-
-                c = S1[j-1-i]
-                S1[j-1-i] = S1[j-i]
-                S1[j-i] = c
-
-
-                c = N1[j-1-i]
-                N1[j-1-i] = N1[j-i]
-                N1[j-i] = c
-
-                rotations = rotations + [[j-i,j-i+1,0]]
-                V_ = np.eye(no)
-                V_[j-1-i,j-1-i] = 0
-                V_[j-i,j-i] = 0
-                V_[j-1-i,j-i] = 1
-                V_[j-i,j-1-i] = 1
-                V = np.matmul(V_,V)
-
-
-    print(S1,N1)
-    print('n_closed =',n_closed)
-    return rotations, n_closed, V
-

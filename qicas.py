@@ -1,8 +1,8 @@
 from pyscf import lib, dmrgscf, mcscf, cc
 import os
 import numpy as np
-from solver.jacobi import *
-from solver.gradient import *
+from solver.jacobi import minimize_orb_corr_jacobi, reorder
+from solver.gradient import minimize_orb_corr_GD
 from tccsd import make_tailored_ccsd
 
 
@@ -94,20 +94,20 @@ class QICAS:
         gamma,Gamma = prep_rdm12(dm1,dm2)
 
 
-        if method == '2d_jacobi':
+        if method.upper() == '2D_JACOBI' or method.upper() == '2DJACOBI' or method.upper() == 'JACOBI':
             # Orbital rotation block
             rotations,U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
             rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
             rotations =  rotations + rotation2
             U_ = np.matmul(V,U)
             self.mo_coeff = mo_coeff @ U_.T
-        elif method == 'newton-raphson':
-            U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices)
+        elif method.upper() == 'NEWTON-RAPHSON' or method.upper() == 'NEWTON_RAPHSON' or method.upper() == 'NEWTON' or method.upper() == 'NR':
+            U,self.gamma,self.Gamma = minimize_orb_corr_GD(gamma,Gamma,inactive_indices)
             rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
             U_ = np.matmul(V,U)
             self.mo_coeff = mo_coeff @ U_.T
         else:
-            raise NotImplementedError('Only 2d_jacobi and newton-raphson is supported')
+            raise NotImplementedError('Only 2d_jacobi and newton-raphson are supported')
 
         n_closed_init = (self.mf.mol.nelectron - self.n_act_e) // 2
         if n_closed != n_closed_init:
