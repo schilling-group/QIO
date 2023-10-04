@@ -41,6 +41,8 @@ def make_tailored_ccsd(cc, cas):
         return t1, t2
 
     t1cas_fci, t2cas_fci = get_cas_t1t2(cas)
+    t1_init = einsum('ia,Ii,Aa->IA', t1cas_fci, pocc, pvir)
+    t2_init = einsum('ijab,Ii,Jj,Aa,Bb->IJAB', t2cas_fci, pocc, pocc, pvir, pvir)
 
     def callback(kwargs):
         """Tailor CCSD amplitudes within CAS."""
@@ -48,6 +50,7 @@ def make_tailored_ccsd(cc, cas):
         # Project CCSD amplitudes onto CAS:
         t1cas_cc = einsum('IA,Ii,Aa->ia', t1, pocc, pvir)
         t2cas_cc = einsum('IJAB,Ii,Jj,Aa,Bb->ijab', t2, pocc, pocc, pvir, pvir)
+        #assert np.allclose(t1cas_cc, t1[cas.ncore:cas.ncore+nocc_cas, :cas.ncas-nocc_cas])
         # Take difference FCI-CCSD within CAS:
         dt1 = (t1cas_fci - t1cas_cc)
         dt2 = (t2cas_fci - t2cas_cc)
@@ -61,11 +64,17 @@ def make_tailored_ccsd(cc, cas):
     def make_rdm1():
         """Make 1-RDM using C1 and C2 from CCSD"""
         t1, t2 = cc.t1, cc.t2
+        ind0 = cas.ncore
+        ind1 = cas.ncore+nocc_cas
+        ind2 = cas.ncas-nocc_cas
+        #assert np.allclose(t1cas_fci, t1[ind0:ind1, :ind2])
+        #assert np.allclose(t2cas_fci, t2[ind0:ind1, ind0:ind1, :ind2, :ind2])
         c0 = 1.
-        c1 = t1
+        c1 = t1.copy()
         c2 = t2 + einsum('ia,jb->ijab', t1, t1) 
         mycisd = cisd.CISD(cc._scf)
         cisdvec = pyscf.ci.cisd.amplitudes_to_cisdvec(c0, c1, c2)
+        cisdvec /= np.linalg.norm(cisdvec)
         return mycisd.make_rdm1(cisdvec)
 
     def make_rdm2():
@@ -76,9 +85,10 @@ def make_tailored_ccsd(cc, cas):
         c2 = t2 + einsum('ia,jb->ijab', t1, t1) 
         mycisd = cisd.CISD(cc._scf)
         cisdvec = pyscf.ci.cisd.amplitudes_to_cisdvec(c0, c1, c2)
+        cisdvec /= np.linalg.norm(cisdvec)
         return mycisd.make_rdm2(cisdvec)
 
     cc.callback = callback
-    #cc.make_rdm1 = make_rdm1
-    #cc.make_rdm2 = make_rdm2
-    return cc
+    cc.make_rdm1 = make_rdm1
+    cc.make_rdm2 = make_rdm2
+    return cc, t1_init, t2_init 

@@ -1,3 +1,4 @@
+from functools import reduce
 from pyscf import lib, dmrgscf, mcscf, cc
 import os
 import numpy as np
@@ -28,6 +29,7 @@ class QICAS:
         self.n_cas, self.n_act_e = act_space
         self.mc = mc
         self.max_cycle = 100
+        self.step_size = 1.
         # max bond dimension in DMRG
         self.max_M = 200
 
@@ -62,22 +64,30 @@ class QICAS:
             mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
             #mc = fci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
             mc.verbose = 4
+            mc.canonicalization = True 
             mc.fix_spin_(ss=0)
             mc.natorb = True
             mc.kernel(mo_coeff.copy())
-            print("mo_energy ", mc.mo_energy)
 
             print('CASCI energy:',mc.e_tot)
-            tcc = make_tailored_ccsd(tcc, mc)
+            tcc, t1, t2 = make_tailored_ccsd(tcc, mc)
             tcc.verbose = 4
             tcc.max_cycle = 100
             tcc.level_shift = 0.1
-            tcc.kernel()
+            tcc.kernel(t1=t1, t2=t2)
             print('TCCSD energy:',tcc.e_tot)
             dm1 = tcc.make_rdm1()
-            assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
             dm2 = tcc.make_rdm2()
+            assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
             assert np.isclose(np.einsum('iijj->', dm2), self.mf.mol.nelectron*(self.mf.mol.nelectron-1), atol=1e-6)
+            dm1_T = dm1.copy().T
+            dm2_T = dm2.copy().transpose((1,0,3,2))
+            np.allclose(dm1_T, dm1)
+            np.allclose(dm2_T, dm2)
+            # check if dm1 is positive semidefinite
+            # occ, _ = np.linalg.eigh(dm1)
+            #if np.any(occ < 0):
+            #    raise ValueError("Negative eigenvalues in dm1")
 
         else:
             # DMRG and RDMs prep block
@@ -102,7 +112,7 @@ class QICAS:
             U_ = np.matmul(V,U)
             self.mo_coeff = mo_coeff @ U_.T
         elif method.upper() == 'NEWTON-RAPHSON' or method.upper() == 'NEWTON_RAPHSON' or method.upper() == 'NEWTON' or method.upper() == 'NR':
-            U,self.gamma,self.Gamma = minimize_orb_corr_GD(gamma,Gamma,inactive_indices)
+            U,self.gamma,self.Gamma = minimize_orb_corr_GD(gamma,Gamma,inactive_indices, max_cycle=self.max_cycle, step_size=self.step_size)
             rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
             U_ = np.matmul(V,U)
             self.mo_coeff = mo_coeff @ U_.T
@@ -117,7 +127,7 @@ class QICAS:
         mycas = mcscf.CASCI(self.mf,self.n_cas,self.mf.mol.nelectron-2*n_closed)
 
         mycas.fix_spin_(ss=0)
-        #mycas.canonicalization = True
+        mycas.canonicalization = True
         mycas.natorb = True
         mycas.verbose = 4
         etot = mycas.kernel(self.mo_coeff)[0]

@@ -12,6 +12,12 @@ def shannon(spec):
     '''
     # FIXME: can spec be negative? if yes, is it ok to just discard the negative part?
     spec = np.asarray(spec)
+    if np.any(spec < 0):
+        print(spec)
+        raise ValueError("spec has negative entries")
+    elif np.any(spec > 1):
+        print(spec)
+        raise ValueError("spec has entries larger than 1")
     spec = spec[spec > 0]
     return -np.sum(spec * np.log(spec)) 
 

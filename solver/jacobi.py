@@ -3,7 +3,7 @@ import copy
 import sys
 from scipy.linalg import expm
 
-from entropy import shannon
+from entropy import shannon, get_cost_fqi
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -222,7 +222,7 @@ def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,N_cycle):
                     if t != None:
                         #print('t=',t)
                         gamma0, Gamma0 = jacobi_transform(gamma0,Gamma0,i,j,t)
-                        new_cost = jacobi_cost_full(gamma0,Gamma0,inactive_indices)
+                        new_cost = get_cost_fqi(gamma0,Gamma0,inactive_indices)
                         #print(i,j,'cost =',new_cost)
                         advance = cost - new_cost
                         cost = new_cost

@@ -137,7 +137,7 @@ def FQI_display(gamma,Gamma,inactive_indices,verbose=True):
     return cost_
             
 
-def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices):
+def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,step_size=0.1,thresh=1e-4,max_cycle=100):
     
     '''
 
@@ -146,9 +146,10 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices):
     Args:
         gamma (ndarray): initial 1RDM
         Gamma (ndarray): initial 2RDM
-        active_indices (list): active orbital indices
         inactive_indices (list): inactive orbital indices
-        N_cycle (int): maximal number of cycles of jacobi rotation during orbital optimization
+        step_size (float): step size of gradient descent
+        thresh (float): threshold of max gradient norm to stop optimization
+        max_cycle (int): maximal number of cycles of jacobi rotation during orbital optimization
 
     Returns:
         rotations (list): history of jacobi rotations (orbital_i, orbital_j, rotational_angle)
@@ -164,20 +165,22 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices):
     X = X - X.T
     U = expm(X)
     U_ = np.kron(U,np.eye(2))
-    gamma0 = np.einsum('ia,jb,ab->ij',U_,U_,gamma_,optimize='optimal')
-    Gamma0 = np.einsum('ia,jb,kc,ld,abcd->ijkl',U,U,U,U,Gamma_,optimize='optimal')
+    #gamma0 = np.einsum('ia,jb,ab->ij',U_,U_,gamma_,optimize='optimal')
+    #Gamma0 = np.einsum('ia,jb,kc,ld,abcd->ijkl',U,U,U,U,Gamma_,optimize='optimal')
+    gamma0 = gamma_.copy()
+    Gamma0 = Gamma_.copy()
     FQI_display(gamma0,Gamma0,inactive_indices)
 
     U_tot = U
     grad = np.ones((no,no))
     
     n=0
-    while np.amax(abs(grad)) > 0.0001 or n < 10**2:
+    while np.amax(abs(grad)) > thresh and n < max_cycle:
         n += 1
         grad = FQI_grad(gamma0,Gamma0,inactive_indices)    
         hess = FQI_hess(gamma0,Gamma0,inactive_indices)
         level_shift = 1e-2
-        X = -grad/(hess+level_shift*np.ones((no,no)))
+        X = -grad/(hess+level_shift*np.ones((no,no))) * step_size
 
         
         U = expm(X)
@@ -185,7 +188,8 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices):
         U_ = np.kron(U,np.eye(2))
         gamma0 = np.einsum('ia,jb,ab->ij',U_,U_,gamma0,optimize='optimal')
         Gamma0 = np.einsum('ia,jb,kc,ld,abcd->ijkl',U,U,U,U,Gamma0,optimize='optimal')
-        if n % 10 == 0:
-            FQI_display(gamma0,Gamma0,inactive_indices)
+        cost = get_cost_fqi(gamma0,Gamma0,inactive_indices)
+        if n % 1 == 0:
+            print("iteration", n, "max grad", np.amax(abs(grad)), "cost", cost)
 
     return U_tot, gamma0, Gamma0
