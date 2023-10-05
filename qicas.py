@@ -1,8 +1,11 @@
 from functools import reduce
+import warnings
+import logging
+
 from pyscf import lib, dmrgscf, mcscf, cc
 import os
 import numpy as np
-from solver.jacobi import minimize_orb_corr_jacobi, reorder
+from solver.jacobi import minimize_orb_corr_jacobi, reorder, reorder_fast, reorder_occ
 from solver.gradient import minimize_orb_corr_GD
 from tccsd import make_tailored_ccsd
 
@@ -27,11 +30,44 @@ class QICAS:
         self.mf = mf
         self.no = len(mf.mo_coeff)
         self.n_cas, self.n_act_e = act_space
+        self.n_core = self.mf.mol.nelectron // 2 - self.n_cas
         self.mc = mc
         self.max_cycle = 100
+        self.thresh = 1e-4
         self.step_size = 1.
         # max bond dimension in DMRG
         self.max_M = 200
+        self.tcc_e_tot = None
+
+        # settings for tcc solver
+        self.tcc_max_cycle = 100
+        self.tcc_level_shift = 0.
+
+        #
+        self.verbose = mf.verbose
+
+        # logging setup
+        self.logger = logging.getLogger('info')
+        self.logger.setLevel(logging.INFO)
+        # Create a file handler
+        file_handler = logging.FileHandler('qicas.log')
+        file_handler.setLevel(logging.INFO)
+        self.logger.addHandler(file_handler)
+        # Create a console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        self.logger.addHandler(console_handler)
+
+        # debug flag
+        self.debug = False
+    
+    def dump_flags(self):
+        print("="*35+"QICAS FLAGS"+"="*35)
+        self.logger.info("max_cycle = %d", self.max_cycle)
+        self.logger.info("thresh = %e", self.thresh)
+        self.logger.info("step_size = %f", self.step_size)
+        self.logger.info("max_M = %d", self.max_M)
+        self.logger.info("tcc_e_tot = %s", str(self.tcc_e_tot))
 
     def kernel(self, inactive_indices, mo_coeff, is_tcc=False, method='newton-raphson'):
 
@@ -63,77 +99,77 @@ class QICAS:
             tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
             mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
             #mc = fci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
-            mc.verbose = 4
+            mc.verbose = self.verbose
             mc.canonicalization = True 
+            mc.sorting_mo_energy = True
             mc.fix_spin_(ss=0)
             mc.natorb = True
             mc.kernel(mo_coeff.copy())
 
-            print('CASCI energy:',mc.e_tot)
+            self.logger.info('CASCI energy = %d',mc.e_tot)
             tcc, t1, t2 = make_tailored_ccsd(tcc, mc)
-            tcc.verbose = 4
-            tcc.max_cycle = 100
-            tcc.level_shift = 0.1
+            tcc.verbose = self.verbose
+            tcc.max_cycle = self.tcc_max_cycle
+            tcc.level_shift = self.tcc_level_shift
+            self.logger.info('mo energy = %s', str(tcc._scf.mo_energy))
             tcc.kernel(t1=t1, t2=t2)
-            print('TCCSD energy:',tcc.e_tot)
+            self.tcc_e_tot = tcc.e_tot
+            self.logger.info('TCCSD energy = %d',tcc.e_tot)
             dm1 = tcc.make_rdm1()
             dm2 = tcc.make_rdm2()
-            assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
-            assert np.isclose(np.einsum('iijj->', dm2), self.mf.mol.nelectron*(self.mf.mol.nelectron-1), atol=1e-6)
-            dm1_T = dm1.copy().T
-            dm2_T = dm2.copy().transpose((1,0,3,2))
-            np.allclose(dm1_T, dm1)
-            np.allclose(dm2_T, dm2)
-            # check if dm1 is positive semidefinite
-            # occ, _ = np.linalg.eigh(dm1)
-            #if np.any(occ < 0):
-            #    raise ValueError("Negative eigenvalues in dm1")
+            if self.debug:
+                assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
+                assert np.isclose(np.einsum('iijj->', dm2), self.mf.mol.nelectron*(self.mf.mol.nelectron-1), atol=1e-6)
+                dm1_T = dm1.copy().T
+                dm2_T = dm2.copy().transpose((1,0,3,2))
+                np.allclose(dm1_T, dm1)
+                np.allclose(dm2_T, dm2)
+                # check if dm1 is positive semidefinite
+                occ, _ = np.linalg.eigh(dm1)
+                if np.any(occ < 0):
+                    raise ValueError("Negative eigenvalues in dm1")
 
         else:
             # DMRG and RDMs prep block
             mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
             mc = dmrgci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
             edmrg = mc.kernel(mo_coeff)[0]
-            print('DMRG energy:',edmrg)
+            self.logger.info('DMRG energy = %d',edmrg)
             # the spin argument requires special modification to the local block2main code
             #dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
             dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron) 
-            assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
-            assert np.isclose(np.einsum('iijj->', dm2), self.mf.mol.nelectron*(self.mf.mol.nelectron-1), atol=1e-6)
+            if self.debug:
+                assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
+                assert np.isclose(np.einsum('iijj->', dm2), self.mf.mol.nelectron*(self.mf.mol.nelectron-1), atol=1e-6)
 
         gamma,Gamma = prep_rdm12(dm1,dm2)
 
 
         if method.upper() == '2D_JACOBI' or method.upper() == '2DJACOBI' or method.upper() == 'JACOBI':
             # Orbital rotation block
-            rotations,U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
-            rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
-            rotations =  rotations + rotation2
-            U_ = np.matmul(V,U)
-            self.mo_coeff = mo_coeff @ U_.T
+            _,U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
         elif method.upper() == 'NEWTON-RAPHSON' or method.upper() == 'NEWTON_RAPHSON' or method.upper() == 'NEWTON' or method.upper() == 'NR':
-            U,self.gamma,self.Gamma = minimize_orb_corr_GD(gamma,Gamma,inactive_indices, max_cycle=self.max_cycle, step_size=self.step_size)
-            rotation2, n_closed, V = reorder(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
-            U_ = np.matmul(V,U)
-            self.mo_coeff = mo_coeff @ U_.T
+            U,self.gamma,self.Gamma = minimize_orb_corr_GD(gamma,Gamma,inactive_indices, thresh=self.thresh, max_cycle=self.max_cycle, step_size=self.step_size,
+                                                            logger=self.logger)
         else:
             raise NotImplementedError('Only 2d_jacobi and newton-raphson are supported')
 
-        n_closed_init = (self.mf.mol.nelectron - self.n_act_e) // 2
-        if n_closed != n_closed_init:
-            raise ValueError("Number of closed orbitals predicted by QICAS is different from the number of inactive orbitals")
-        # Post-QICAS CASCI block
+        V = reorder_occ(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
+        U_ = np.matmul(V,U)
+        self.mo_coeff = mo_coeff @ U_.T
 
-        mycas = mcscf.CASCI(self.mf,self.n_cas,self.mf.mol.nelectron-2*n_closed)
+        # Post-QICAS CASCI block
+        mycas = mcscf.CASCI(self.mf,self.n_cas, self.n_act_e)
 
         mycas.fix_spin_(ss=0)
         mycas.canonicalization = True
         mycas.natorb = True
-        mycas.verbose = 4
+        mycas.sorting_mo_energy = True
+        mycas.verbose = self.verbose
         etot = mycas.kernel(self.mo_coeff)[0]
 
 
-        return etot,n_closed
+        return etot
 
 
 def dmrgci_prep(mc, mol, maxM, tol=1E-12):

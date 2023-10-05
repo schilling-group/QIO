@@ -155,7 +155,7 @@ def jacobi_direct(i,j,gamma,Gamma,inactive_indices):
         return None
 
 
-def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,N_cycle):
+def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,max_cycle):
     
     '''
 
@@ -165,7 +165,7 @@ def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,N_cycle):
         gamma (ndarray): initial 1RDM
         Gamma (ndarray): initial 2RDM
         inactive_indices (list): inactive orbital indices
-        N_cycle (int): maximal number of cycles of jacobi rotation during orbital optimization
+        max_cycle (int): maximal number of cycles of jacobi rotation during orbital optimization
 
     Returns:
         rotations (list): history of jacobi rotations (orbital_i, orbital_j, rotational_angle)
@@ -200,14 +200,14 @@ def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,N_cycle):
 
 
     rotations = []
-    N_steps = N_cycle
+
     
     
     print('Optimizig Active Space...')
     cost = 100
     new_cost = 100
     cycle_cost = 100
-    for n in range(N_steps):
+    for n in range(max_cycle):
         print('============== Cycle '+str(n+1)+' ==============')
         orb_list = np.arange(0,no)
         np.random.shuffle(orb_list)
@@ -240,6 +240,93 @@ def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,N_cycle):
 
     return rotations, U, gamma0, Gamma0
 
+def reorder_fast(gamma, Gamma, n_cas, n_core):
+    """
+    Reorder the orbitals after QICAS optimization. 
+    1. Sort all orbitals wrt to their entropy
+    2. Sort the inactive orbitals wrt to their occupation numbers
+    3. Sort the active orbitals wrt to their occupation numbers
+    4. Move the first N_core orbitals to the front
+
+    Args:
+        gamma (ndarray): 1RDM
+        Gamma (ndarray): 2RDM
+        n_cas (int): number of active orbitals
+        n_core (int): number of core orbitals
+
+    Returns:
+        P (ndarray): permutation matrix that performs the desired reordering
+    """
+    n_orb = len(Gamma) 
+    i = np.arange(n_orb, dtype=int)
+    nu = gamma[2*i,2*i]
+    nd = gamma[2*i+1,2*i+1]
+    nn = Gamma[i,i,i,i]
+    occ_num = nu + nd
+    spec = np.array([1-nu-nd+nn, nu-nn, nd-nn, nn])
+    s_val = -np.sum(np.log(spec)*spec, axis=0)
+    s_val_init = s_val.copy()
+    inds = np.argsort(s_val)[::-1]
+    # get the permutation matrix for the above sorting
+    P = np.eye(n_orb)[inds]
+    s_val = s_val[inds]
+    occ_num = occ_num[inds]
+
+    # sort the inactive orbitals wrt to occupation numbers
+    inds_inactive = np.argsort(occ_num[n_cas:])[::-1]
+    # get the permutation matrix for the above sorting
+    inds = np.concatenate((np.arange(n_cas, dtype=int), (n_cas+inds_inactive)))
+    P = P[inds]
+    s_val = s_val[inds]
+    occ_num = occ_num[inds]
+
+    # sort the active orbitals wrt to occupation numbers
+    inds_active = np.argsort(occ_num[:n_cas])[::-1]
+    # get the permutation matrix for the above sorting
+    inds = np.concatenate((inds_active, np.arange(n_cas, n_orb, dtype=int)))
+
+    s_val = s_val[inds]
+    occ_num = occ_num[inds]
+    P = P[inds]
+
+    # move the first N_core orbitals to the front
+    inds =  [i for i in range(n_cas, n_cas+n_core)]+[i for i in range(n_cas)] + [i for i in range(n_cas+n_core, n_orb)]
+    P = P[inds]
+    s_val = s_val[inds]
+    occ_num = occ_num[inds]
+    print("Orbital entropies =", s_val)
+    print("Orbital occupation numbers =", occ_num)
+    if occ_num[n_core+n_cas-1] < occ_num[n_core+n_cas]:
+        print("Warning: the orbitals are not ordered correctly wrt to occupation numbers!")
+    assert np.allclose(P @ s_val_init, s_val)
+
+    return P
+
+
+def reorder_occ(gamma,Gamma,N_cas):
+    """
+    Reorders orbitals occording to their occupation numbers
+    """
+    n_orb = len(Gamma) 
+    i = np.arange(n_orb, dtype=int)
+    nu = gamma[2*i,2*i]
+    nd = gamma[2*i+1,2*i+1]
+    nn = Gamma[i,i,i,i]
+    occ_num = nu + nd
+    spec = np.array([1-nu-nd+nn, nu-nn, nd-nn, nn])
+    s_val = -np.sum(np.log(spec)*spec, axis=0)
+    inds = np.argsort(occ_num)[::-1]
+    P = np.eye(n_orb)[inds]
+    s_val = s_val[inds]
+    occ_num = occ_num[inds]
+    
+    print("Orbital entropies =", s_val)
+    print("Orbital occupation numbers =", occ_num)
+
+    return P
+
+
+    
 
 
 def reorder(gamma,Gamma,N_cas):
