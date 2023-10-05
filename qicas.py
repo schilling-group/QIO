@@ -103,7 +103,7 @@ class QICAS:
             mc.canonicalization = True 
             mc.sorting_mo_energy = True
             mc.fix_spin_(ss=0)
-            mc.natorb = True
+            mc.natorb = False
             mc.kernel(mo_coeff.copy())
 
             self.logger.info('CASCI energy = %d',mc.e_tot)

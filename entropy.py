@@ -13,8 +13,8 @@ def shannon(spec):
     # FIXME: can spec be negative? if yes, is it ok to just discard the negative part?
     spec = np.asarray(spec)
     if np.any(spec < 0):
-        print(spec)
-        raise ValueError("spec has negative entries")
+        if np.any(np.abs(spec[spec < 0]) > 1e-6):
+            raise ValueError("spec has negative entries")
     elif np.any(spec > 1):
         print(spec)
         raise ValueError("spec has entries larger than 1")
