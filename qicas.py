@@ -106,7 +106,7 @@ class QICAS:
             mc.natorb = True
             mc.kernel(mo_coeff.copy())
 
-            self.logger.info('CASCI energy = %d',mc.e_tot)
+            self.logger.info('CASCI energy = %.6f',mc.e_tot)
             tcc, t1, t2 = make_tailored_ccsd(tcc, mc)
             tcc.verbose = self.verbose
             tcc.max_cycle = self.tcc_max_cycle
@@ -114,7 +114,7 @@ class QICAS:
             self.logger.info('mo energy = %s', str(tcc._scf.mo_energy))
             tcc.kernel(t1=t1, t2=t2)
             self.tcc_e_tot = tcc.e_tot
-            self.logger.info('TCCSD energy = %d',tcc.e_tot)
+            self.logger.info('TCCSD energy = %.6f',tcc.e_tot)
             dm1 = tcc.make_rdm1()
             dm2 = tcc.make_rdm2()
             if self.debug:
@@ -134,7 +134,7 @@ class QICAS:
             mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
             mc = dmrgci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
             edmrg = mc.kernel(mo_coeff)[0]
-            self.logger.info('DMRG energy = %d',edmrg)
+            self.logger.info('DMRG energy = %6.f',edmrg)
             # the spin argument requires special modification to the local block2main code
             #dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
             dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron) 

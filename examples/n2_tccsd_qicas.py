@@ -15,14 +15,14 @@ n_cas = 8                     # number of active orbitals
 n_should_close = 3            # target number of closed orbitals
 # r = [float(sys.argv[-2])]     # list of geometry parameters
 # bd = int(sys.argv[-1])        # max bond dimension for DMRG
-r = np.arange(2.0,3.3,0.2)    # list of geometry parameters
+r = np.arange(0.8,1.9,0.2)    # list of geometry parameters
 
 
 bd = 200
 tot_iter = 6
 E_casci = np.zeros((len(r), 3+tot_iter))      # array of output data
 E_tccsd = np.zeros((len(r), tot_iter))      # array of output data
-basis = '321g'               # basis set
+basis = 'ccpvtz'               # basis set
 
 
 for i in range(len(r)):
@@ -86,14 +86,14 @@ for i in range(len(r)):
     inactive_indices = list(range(n_should_close))+list(range(n_cas+n_should_close,no))
     act_space = (n_cas,ne-2*n_should_close)
    
+    my_qicas = QICAS(mf=mf, mc=None, act_space=act_space) 
+    my_qicas.max_cycle = 100
+    my_qicas.max_M = bd
+    my_qicas.step_size = 0.5
+    my_qicas.thresh = 5e-5
+    my_qicas.dump_flags()
     for micro_i in range(tot_iter):
         print("mo_energy", mf.mo_energy)
-        my_qicas = QICAS(mf=mf, mc=None, act_space=act_space) 
-        my_qicas.max_cycle = 100
-        my_qicas.max_M = bd
-        my_qicas.step_size = 0.5
-        my_qicas.thresh = 5e-5
-        my_qicas.dump_flags()
         e_qicas = my_qicas.kernel(is_tcc=True,  inactive_indices=inactive_indices,
             mo_coeff=mo_coeff, method='nr')
         mo_coeff = my_qicas.mo_coeff.copy()
@@ -107,12 +107,12 @@ for i in range(len(r)):
 
 
 
-print('r\tHF-CAS(6,6)\tCASSCF(6,6)\tQICAS-CASCI')
+print('r\tHF-CAS(8,8)\tCASSCF(8,8)\tQICAS-CASCI')
 print(E_casci)
 print('r\tTCCSD')
 print(E_tccsd)
-np.savetxt('n2_casci_energies_tcc_scan_cisd_iter5_321g_test.txt',E_casci)
-np.savetxt('n2_tccsd_energies_tcc_scan_cisd_iter5_321g_test.txt',E_tccsd)
+np.savetxt('n2_casci_energies_tcc_scan_cisd_iter5_ccpvtz_0.txt',E_casci)
+np.savetxt('n2_tccsd_energies_tcc_scan_cisd_iter5_ccpvtz_0.txt',E_tccsd)
 
 
 
