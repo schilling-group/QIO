@@ -35,7 +35,10 @@ def make_tailored_ccsd(cc, cas):
         """Get T1 and T2 amplitudes from FCI wave function."""
         cisdvec = pyscf.ci.cisd.from_fcivec(cas.ci, cas.ncas, nelec_cas)
         c0, c1, c2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, cas.ncas, nocc_cas)
+        print("C0 = %.4f" % c0)
         assert (abs(c0) > 1e-8)
+        if (abs(c0) < 2e-3):
+            print("Warning: C0 = %.4f is too small for TCCSD. Current orbitals are a bad guess!", c0)
         t1 = c1/c0
         t2 = c2/c0 - einsum('ia,jb->ijab', t1, t1)
         return t1, t2

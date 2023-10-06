@@ -11,7 +11,7 @@ from tccsd import make_tailored_ccsd
 
 
 class QICAS:
-    def __init__(self, mf, mc, act_space=None):
+    def __init__(self, mf, mc, act_space=None, logger=None):
         """
         Attributes:
             mf (pyscf.scf object): mean-field object
@@ -42,21 +42,24 @@ class QICAS:
         # settings for tcc solver
         self.tcc_max_cycle = 100
         self.tcc_level_shift = 0.
-
+        self.tcc_casci_natorb = True
         #
         self.verbose = mf.verbose
 
         # logging setup
-        self.logger = logging.getLogger('info')
-        self.logger.setLevel(logging.INFO)
-        # Create a file handler
-        file_handler = logging.FileHandler('qicas.log')
-        file_handler.setLevel(logging.INFO)
-        self.logger.addHandler(file_handler)
-        # Create a console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-        self.logger.addHandler(console_handler)
+        if logger is None:
+            self.logger = logging.getLogger('info')
+            self.logger.setLevel(logging.INFO)
+            # Create a file handler
+            file_handler = logging.FileHandler('qicas.log')
+            file_handler.setLevel(logging.INFO)
+            self.logger.addHandler(file_handler)
+            # Create a console handler
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
+            self.logger.addHandler(console_handler)
+        else:
+            self.logger = logger
 
         # debug flag
         self.debug = False
@@ -68,6 +71,10 @@ class QICAS:
         self.logger.info("step_size = %f", self.step_size)
         self.logger.info("max_M = %d", self.max_M)
         self.logger.info("tcc_e_tot = %s", str(self.tcc_e_tot))
+        self.logger.info("tcc_max_cycle = %d", self.tcc_max_cycle)
+        self.logger.info("tcc_level_shift = %f", self.tcc_level_shift)
+        self.logger.info("tcc_casci_natorb = %s", str(self.tcc_casci_natorb))
+
 
     def kernel(self, inactive_indices, mo_coeff, is_tcc=False, method='newton-raphson'):
 
@@ -101,9 +108,9 @@ class QICAS:
             #mc = fci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
             mc.verbose = self.verbose
             mc.canonicalization = True 
-            mc.sorting_mo_energy = True
+            mc.sorting_mo_energy = False
             mc.fix_spin_(ss=0)
-            mc.natorb = False
+            mc.natorb = self.tcc_casci_natorb
             mc.kernel(mo_coeff.copy())
 
             self.logger.info('CASCI energy = %.6f',mc.e_tot)
@@ -163,7 +170,7 @@ class QICAS:
 
         mycas.fix_spin_(ss=0)
         mycas.canonicalization = True
-        mycas.natorb = True
+        mycas.natorb = self.tcc_casci_natorb
         mycas.sorting_mo_energy = True
         mycas.verbose = self.verbose
         etot = mycas.kernel(self.mo_coeff)[0]
