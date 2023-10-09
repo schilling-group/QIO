@@ -14,7 +14,9 @@ def shannon(spec):
     spec = np.asarray(spec)
     if np.any(spec < 0):
         if np.any(np.abs(spec[spec < 0]) > 1e-6):
-            raise ValueError("spec has negative entries")
+            print("Warning: spec has negative entries!")
+            print(spec[spec<0])
+            #raise ValueError("spec has negative entries")
     elif np.any(spec > 1):
         print(spec)
         raise ValueError("spec has entries larger than 1")

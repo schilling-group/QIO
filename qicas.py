@@ -2,7 +2,7 @@ from functools import reduce
 import warnings
 import logging
 
-from pyscf import lib, dmrgscf, mcscf, cc
+from pyscf import lib, dmrgscf, mcscf, cc, ci
 import os
 import numpy as np
 from solver.jacobi import minimize_orb_corr_jacobi, reorder, reorder_fast, reorder_occ
@@ -11,13 +11,14 @@ from tccsd import make_tailored_ccsd
 
 
 class QICAS:
-    def __init__(self, mf, mc, act_space=None, logger=None):
+    def __init__(self, mf, mc, act_space=None, n_core=0, logger=None):
         """
         Attributes:
             mf (pyscf.scf object): mean-field object
             mc (pyscf.mcscf object): mcscf object
             act_space (tuple): tuple of (n_cas, n_act_e), where n_cas is the number of active orbitals
                 and n_act_e is the number of active electrons
+            n_core (int): number of core orbitals
             no (int): number of non-frozen orbitals
             max_cycle (int): max number of cycle of jacobi rotations
             max_M (int): max bond dimension in DMRG
@@ -30,7 +31,7 @@ class QICAS:
         self.mf = mf
         self.no = len(mf.mo_coeff)
         self.n_cas, self.n_act_e = act_space
-        self.n_core = self.mf.mol.nelectron // 2 - self.n_cas
+        self.n_core = n_core
         self.mc = mc
         self.max_cycle = 100
         self.thresh = 1e-4
@@ -43,6 +44,7 @@ class QICAS:
         self.tcc_max_cycle = 100
         self.tcc_level_shift = 0.
         self.tcc_casci_natorb = True
+        self.tcc_casci_max_cycle = 100
         #
         self.verbose = mf.verbose
 
@@ -70,6 +72,7 @@ class QICAS:
         self.logger.info("thresh = %e", self.thresh)
         self.logger.info("step_size = %f", self.step_size)
         self.logger.info("max_M = %d", self.max_M)
+        self.logger.info("n_core = %d", self.n_core)
         self.logger.info("tcc_e_tot = %s", str(self.tcc_e_tot))
         self.logger.info("tcc_max_cycle = %d", self.tcc_max_cycle)
         self.logger.info("tcc_level_shift = %f", self.tcc_level_shift)
@@ -103,23 +106,25 @@ class QICAS:
 
         if is_tcc:
             # using TCCSD to get initial RDM1 and RDM2
-            tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
             mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
-            #mc = fci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
+            #mc.frozen = self.n_core
             mc.verbose = self.verbose
             mc.canonicalization = True 
-            mc.sorting_mo_energy = False
+            mc.sorting_mo_energy = True
+            mc.max_cycle = self.tcc_casci_max_cycle
             mc.fix_spin_(ss=0)
+            mc.tol = 1e-8
             mc.natorb = self.tcc_casci_natorb
             mc.kernel(mo_coeff.copy())
+            tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
 
             self.logger.info('CASCI energy = %.6f',mc.e_tot)
             tcc, t1, t2 = make_tailored_ccsd(tcc, mc)
             tcc.verbose = self.verbose
             tcc.max_cycle = self.tcc_max_cycle
             tcc.level_shift = self.tcc_level_shift
-            self.logger.info('mo energy = %s', str(tcc._scf.mo_energy))
-            tcc.kernel(t1=t1, t2=t2)
+            self.logger.info('mc mo energy = %s', str(mc.mo_energy))
+            tcc.kernel()
             self.tcc_e_tot = tcc.e_tot
             self.logger.info('TCCSD energy = %.6f',tcc.e_tot)
             dm1 = tcc.make_rdm1()
@@ -167,9 +172,10 @@ class QICAS:
 
         # Post-QICAS CASCI block
         mycas = mcscf.CASCI(self.mf,self.n_cas, self.n_act_e)
-
+        #mycas.frozen = self.n_core
         mycas.fix_spin_(ss=0)
         mycas.canonicalization = True
+        mycas.max_cycle = self.tcc_casci_max_cycle
         mycas.natorb = self.tcc_casci_natorb
         mycas.sorting_mo_energy = True
         mycas.verbose = self.verbose
