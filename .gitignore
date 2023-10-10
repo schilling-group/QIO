@@ -1,0 +1,15 @@
+venv/
+*.pdf
+log*
+*.log
+data/
+examples/*.npy
+examples/*.txt
+examples/log*
+.vscode/
+__pycache__/
+note.ipynb
+examples/.DS_Store
+.env
+*.npy
+*.txt
