@@ -98,3 +98,24 @@ def make_tailored_ccsd(cc, cas):
     cc.make_rdm1 = make_rdm1
     cc.make_rdm2 = make_rdm2
     return cc, t1_init, t2_init 
+
+def make_no(rdm1, mo_coeff):
+    """
+    Make natural orbitals from 1-RDM.
+    
+    Args:
+        rdm1: 1-RDM
+        mo_coeff: MO coefficients
+    
+    Returns:
+        no_coeff: Natural orbitals
+    """
+    # diagonalize 1-RDM
+    e, v = np.linalg.eigh(rdm1)
+    # sort in descending order
+    idx = np.argsort(e)[::-1]
+    e = e[idx]
+    v = v[:,idx]
+    # transform to NO basis
+    no_coeff = np.dot(mo_coeff, v)
+    return no_coeff
