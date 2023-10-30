@@ -31,6 +31,43 @@ def make_tailored_ccsd(cc, cas):
     pocc = np.linalg.multi_dot((mo_cc_occ.T, ovlp, mo_cas_occ))
     pvir = np.linalg.multi_dot((mo_cc_vir.T, ovlp, mo_cas_vir))
 
+    def find_ref_det(cas):
+        """
+        Identifies the dominant det in the CASCI solution. 
+        reorder the mo_coeff so that this det represents the reference
+        det for CCSD.
+
+        Args:
+            cas: the CASCI/CASSCF object
+        
+        Returns:
+            cas (ndarray): reordered mo coefficients.
+        """
+        cisdvec = pyscf.ci.cisd.from_fcivec(cas.ci, cas.ncas, nelec_cas)
+        ref_det_idx = np.argmax(np.abs(cisdvec))
+        curr_str = '1'*cc.nocc*2
+        det_str = pyscf.fci.cistring.addr2str(cc.nmo, cc.nocc*2, ref_det_idx)
+        det_bin = bin(det_str)[2:]
+        locs = list(set(find_ones(det_bin)).symmetric_difference(set(find_ones(curr_str))))
+        print("Swapping indices in determinant: ", locs//2)
+        if len(locs) > 0:
+            if len(locs) > 2:
+                raise ValueError("Error: more than two orbitals to swap. This is not supported yet.")
+                
+            locs = np.array(locs)//2
+
+            # swap the orbitals
+            mo_coeff = cas.mo_coeff.copy()
+            cas.mo_coeff[:,locs] = mo_coeff[:,[locs[1],locs[0]]]
+            #ucas = cas.mo_coeff[:,cas.ncore:cas.ncore+cas.ncas].copy()
+
+            # update the ci vectors
+            #cas.ci = cas.fcisolver.transform_ci_for_orbital_rotation(cas.ci, cas.ncas, cas.nelecas, ucas)
+        return cas
+
+    def find_ones(s):
+        return [i for i, char in enumerate(reversed(s)) if char == '1']
+
     def get_cas_t1t2(cas):
         """Get T1 and T2 amplitudes from FCI wave function."""
         cisdvec = pyscf.ci.cisd.from_fcivec(cas.ci, cas.ncas, nelec_cas)
@@ -39,6 +76,16 @@ def make_tailored_ccsd(cc, cas):
         print("|C0| = %.4e, |C1_max| = %.4e" % (np.abs(c0), c1_max))
         if np.abs(c0) < c1_max:
             print("Warning: |C0| = %.4e is smaller than |C1_max| = %.4e. Current choice of reference determinant is bad!" % (np.abs(c0), c1_max))
+            print("Trying to find a better reference determinant in the singles space...")
+            cas = find_ref_det(cas)
+            print("Rerun CASCI to get new CI vector")
+            cas.kernel()
+            cisdvec = pyscf.ci.cisd.from_fcivec(cas.ci, cas.ncas, nelec_cas)
+            c0, c1, c2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, cas.ncas, nocc_cas)
+            c1_max = np.max(np.abs(c1))
+            print("New CI coeffs:")
+            print("|C0| = %.4e, |C1_max| = %.4e" % (np.abs(c0), c1_max))
+
         assert (abs(c0) > 1e-8)
         if (abs(c0) < 2e-3):
             print("Warning: |C0| = %.4e is too small for TCCSD. Current orbitals are a bad guess!" % np.abs(c0))
@@ -93,6 +140,10 @@ def make_tailored_ccsd(cc, cas):
         cisdvec = pyscf.ci.cisd.amplitudes_to_cisdvec(c0, c1, c2)
         cisdvec /= np.linalg.norm(cisdvec)
         return mycisd.make_rdm2(cisdvec)
+    
+
+
+
 
     cc.callback = callback
     cc.make_rdm1 = make_rdm1
