@@ -2,12 +2,12 @@ from functools import reduce
 import warnings
 import logging
 
-from pyscf import lib, dmrgscf, mcscf, cc, ci
+from pyscf import lib, dmrgscf, mcscf, cc, ci, symm
 import os
 import numpy as np
 from solver.jacobi import minimize_orb_corr_jacobi, reorder, reorder_fast, reorder_occ
 from solver.gradient import minimize_orb_corr_GD
-from tccsd import make_tailored_ccsd
+from tccsd import make_tailored_ccsd, make_no
 
 
 class QICAS:
@@ -43,8 +43,9 @@ class QICAS:
         # settings for tcc solver
         self.tcc_max_cycle = 100
         self.tcc_level_shift = 0.
-        self.tcc_casci_natorb = True
-        self.tcc_casci_max_cycle = 100
+        self.casci_natorb = True
+        self.casci_max_cycle = 300
+        self.casci_ss_shift = 0.5
         #
         self.verbose = mf.verbose
 
@@ -76,7 +77,7 @@ class QICAS:
         self.logger.info("tcc_e_tot = %s", str(self.tcc_e_tot))
         self.logger.info("tcc_max_cycle = %d", self.tcc_max_cycle)
         self.logger.info("tcc_level_shift = %f", self.tcc_level_shift)
-        self.logger.info("tcc_casci_natorb = %s", str(self.tcc_casci_natorb))
+        self.logger.info("tcc_casci_natorb = %s", str(self.casci_natorb))
 
 
     def kernel(self, inactive_indices, mo_coeff, is_tcc=False, method='newton-raphson'):
@@ -109,13 +110,16 @@ class QICAS:
             mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
             #mc.frozen = self.n_core
             mc.verbose = self.verbose
-            mc.canonicalization = True 
-            mc.sorting_mo_energy = True
-            mc.max_cycle = self.tcc_casci_max_cycle
-            mc.fix_spin_(ss=0)
+            mc.canonicalization = True
+            mc.sorting_mo_energy = False 
+            mc.fcisolver.max_cycle = self.casci_max_cycle
+            mc.fix_spin_(ss=0, shift=self.casci_ss_shift)
             mc.tol = 1e-8
-            mc.natorb = self.tcc_casci_natorb
+            mc.natorb = self.casci_natorb
             mc.kernel(mo_coeff.copy())
+            #mc.mo_coeff, mc.ci, occ = mc.cas_natorb(sort=False)
+
+            
             tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
 
             self.logger.info('CASCI energy = %.6f',mc.e_tot)
@@ -129,6 +133,26 @@ class QICAS:
             self.logger.info('TCCSD energy = %.6f',tcc.e_tot)
             dm1 = tcc.make_rdm1()
             dm2 = tcc.make_rdm2()
+
+            # make NO in inactive space 
+            #n_core = (self.mf.mol.nelectron - self.n_act_e)//2
+            #inactive_subspace = list(range(n_core)) + list(range(self.n_cas+n_core,self.no))
+            #mo_coeff, _ = make_no(dm1, mo_coeff, inactive_subspace)
+
+            #tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
+
+            #self.logger.info('CASCI energy = %.6f',mc.e_tot)
+            #tcc, t1, t2 = make_tailored_ccsd(tcc, mc)
+            #tcc.verbose = self.verbose
+            #tcc.max_cycle = self.tcc_max_cycle
+            #tcc.level_shift = self.tcc_level_shift
+            #self.logger.info('mc mo energy = %s', str(mc.mo_energy))
+            #tcc.kernel()
+            #self.tcc_e_tot = tcc.e_tot
+            #self.logger.info('TCCSD energy = %.6f',tcc.e_tot)
+            #dm1 = tcc.make_rdm1()
+            #dm2 = tcc.make_rdm2()
+
             if self.debug:
                 assert np.isclose(np.sum(dm1.diagonal()), self.mf.mol.nelectron, atol=1e-6)
                 assert np.isclose(np.einsum('iijj->', dm2), self.mf.mol.nelectron*(self.mf.mol.nelectron-1), atol=1e-6)
@@ -169,17 +193,24 @@ class QICAS:
         V = reorder_occ(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
         U_ = np.matmul(V,U)
         self.mo_coeff = mo_coeff @ U_.T
+        #self.mo_coeff = symm.symmetrize_orb(self.mf.mol, self.mo_coeff)
 
         # Post-QICAS CASCI block
-        mycas = mcscf.CASCI(self.mf,self.n_cas, self.n_act_e)
-        #mycas.frozen = self.n_core
-        mycas.fix_spin_(ss=0)
-        mycas.canonicalization = True
-        mycas.max_cycle = self.tcc_casci_max_cycle
-        mycas.natorb = self.tcc_casci_natorb
-        mycas.sorting_mo_energy = True
-        mycas.verbose = self.verbose
-        etot = mycas.kernel(self.mo_coeff)[0]
+        #mycas = mcscf.CASCI(self.mf,self.n_cas, self.n_act_e)
+        ##mycas.frozen = self.n_core
+        #mycas.fix_spin_(ss=0)
+        #mycas.canonicalization = True
+        #mycas.max_cycle = self.casci_max_cycle
+        #mycas.natorb = self.casci_natorb
+        #mycas.sorting_mo_energy = False 
+        #mycas.verbose = self.verbose
+        etot = mc.e_tot
+        #dm1 = mycas.make_rdm1()
+        ##dm2 = mycas.make_rdm2()
+        #gamma, Gamma = prep_rdm12(dm1,dm2)
+        #P = reorder_occ(gamma,Gamma,self.n_cas)
+        #self.mo_coeff = np.dot(self.mo_coeff,P)
+
 
 
         return etot
@@ -205,17 +236,17 @@ def dmrgci_prep(mc, mol, maxM, tol=1E-12):
     mc.fcisolver = dmrgscf.DMRGCI(mol, maxM=maxM, tol=tol)
     mc.fcisolver.runtimeDir = lib.param.TMPDIR
     mc.fcisolver.scratchDirectory = lib.param.TMPDIR
-    mc.fcisolver.threads = int(os.environ.get("OMP_NUM_THREADS", 4))
+    mc.fcisolver.threads = int(os.environ.get("OMP_NUM_THREADS", 8))
     mc.fcisolver.memory = int(mol.max_memory / 1000) # mem in GB
     mc.wfnsym='A1g'
     mc.canonicalization = False
     mc.natorb = False
     
     mc.fcisolver.restart = False
-    mc.fcisolver.scheduleSweeps =[50] 
-    mc.fcisolver.scheduleMaxMs = [maxM] 
-    mc.fcisolver.scheduleTols = [1e-6] 
-    mc.fcisolver.scheduleNoises = [0] 
+    mc.fcisolver.scheduleSweeps =[4, 4, 4, 4, 4] 
+    mc.fcisolver.scheduleMaxMs = [200, 400, 600, 800, 1000] 
+    mc.fcisolver.scheduleTols = [1e-6, 1e-6, 1e-7, 1e-7, 1e-7] 
+    mc.fcisolver.scheduleNoises = [1e-3, 1e-4, 1e-5, 1e-6, 0] 
     return mc
 
 
@@ -245,7 +276,19 @@ def prep_rdm12(dm1, dm2):
     return rdm1,rdm2
 
 
+def get_overlap(fcivector, cisdvec):
+    '''
+    Compute overlap between two vectors
 
+    Args:
+        fcivector (ndarray): FCI vector
+        cisdvec (ndarray): CISD vector
+
+    Returns:
+        overlap (float): overlap between fcivector and cisdvec
+    '''
+    overlap = np.dot(fcivector, cisdvec) / (np.linalg.norm(fcivector) * np.linalg.norm(cisdvec))
+    return overlap
 
 
 

@@ -47,22 +47,27 @@ def make_tailored_ccsd(cc, cas):
         ref_det_idx = np.argmax(np.abs(cisdvec))
         curr_str = '1'*cc.nocc*2
         det_str = pyscf.fci.cistring.addr2str(cc.nmo, cc.nocc*2, ref_det_idx)
-        det_bin = bin(det_str)[2:]
+        det_bin = bin(ref_det_idx)[2:]
         locs = list(set(find_ones(det_bin)).symmetric_difference(set(find_ones(curr_str))))
-        print("Swapping indices in determinant: ", locs//2)
-        if len(locs) > 0:
-            if len(locs) > 2:
-                raise ValueError("Error: more than two orbitals to swap. This is not supported yet.")
-                
-            locs = np.array(locs)//2
+        act_dm1 = cas.fcisolver.make_rdm1(cas.ci, cas.ncas, cas.nelecas).diagonal()
+        sort_idx = list(range(cas.ncore)) + list(np.argsort(act_dm1)[::-1] + cas.ncore) + list(range(cas.ncore+cas.ncas, cc.nmo))
+        # sort the orbitals
+        cas.mo_coeff = cas.mo_coeff[:,sort_idx]
 
-            # swap the orbitals
-            mo_coeff = cas.mo_coeff.copy()
-            cas.mo_coeff[:,locs] = mo_coeff[:,[locs[1],locs[0]]]
-            #ucas = cas.mo_coeff[:,cas.ncore:cas.ncore+cas.ncas].copy()
+        #if len(locs) > 0:
+        #    locs = np.array(locs)//2
+        #    if np.min(locs) > cas.ncore and np.max(locs) < cas.ncore+cas.ncas:
+        #        print("Swapping indices in determinant: ", locs)
+        #        if len(locs) > 2:
+        #            raise ValueError("Error: more than two orbitals to swap. This is not supported yet.")
 
-            # update the ci vectors
-            #cas.ci = cas.fcisolver.transform_ci_for_orbital_rotation(cas.ci, cas.ncas, cas.nelecas, ucas)
+        #        # swap the orbitals
+        #        mo_coeff = cas.mo_coeff.copy()
+        #        cas.mo_coeff[:,locs] = mo_coeff[:,[locs[1],locs[0]]]
+                #ucas = cas.mo_coeff[:,cas.ncore:cas.ncore+cas.ncas].copy()
+
+                # update the ci vectors
+                #cas.ci = cas.fcisolver.transform_ci_for_orbital_rotation(cas.ci, cas.ncas, cas.nelecas, ucas)
         return cas
 
     def find_ones(s):
@@ -74,17 +79,19 @@ def make_tailored_ccsd(cc, cas):
         c0, c1, c2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, cas.ncas, nocc_cas)
         c1_max = np.max(np.abs(c1))
         print("|C0| = %.4e, |C1_max| = %.4e" % (np.abs(c0), c1_max))
-        if np.abs(c0) < c1_max:
-            print("Warning: |C0| = %.4e is smaller than |C1_max| = %.4e. Current choice of reference determinant is bad!" % (np.abs(c0), c1_max))
-            print("Trying to find a better reference determinant in the singles space...")
-            cas = find_ref_det(cas)
-            print("Rerun CASCI to get new CI vector")
-            cas.kernel()
-            cisdvec = pyscf.ci.cisd.from_fcivec(cas.ci, cas.ncas, nelec_cas)
-            c0, c1, c2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, cas.ncas, nocc_cas)
-            c1_max = np.max(np.abs(c1))
-            print("New CI coeffs:")
-            print("|C0| = %.4e, |C1_max| = %.4e" % (np.abs(c0), c1_max))
+        #while np.abs(c0) < c1_max or abs(c0) < 2e-3:
+        #    print("Warning: |C0| = %.4e is smaller than |C1_max| = %.4e. Current choice of reference determinant is bad!" % (np.abs(c0), c1_max))
+        #    print("Trying to find a better reference determinant in the singles space...")
+        #    cas = find_ref_det(cas)
+        #    print("Rerun CASCI to get new CI vector")
+        #    cas.natorb = True
+        #    cas.kernel()
+        #    cas.natorb = False 
+        #    cisdvec = pyscf.ci.cisd.from_fcivec(cas.ci, cas.ncas, nelec_cas)
+        #    c0, c1, c2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, cas.ncas, nocc_cas)
+        #    c1_max = np.max(np.abs(c1))
+        #    print("New CI coeffs:")
+        #    print("|C0| = %.4e, |C1_max| = %.4e" % (np.abs(c0), c1_max))
 
         assert (abs(c0) > 1e-8)
         if (abs(c0) < 2e-3):
@@ -150,23 +157,39 @@ def make_tailored_ccsd(cc, cas):
     cc.make_rdm2 = make_rdm2
     return cc, t1_init, t2_init 
 
-def make_no(rdm1, mo_coeff):
+def make_no(rdm1, mo_coeff, subspace=None):
     """
     Make natural orbitals from 1-RDM.
     
     Args:
-        rdm1: 1-RDM
-        mo_coeff: MO coefficients
+        rdm1 (ndarray): 1-RDM
+        mo_coeff (ndarray): MO coefficients
+        subspace (list): space indices in which natural orbitals are constructed
     
     Returns:
         no_coeff: Natural orbitals
     """
+    if subspace is not None:
+        rdm1_sub = rdm1[subspace,:][:,subspace]
+        mo_coeff_sub = mo_coeff[:, subspace]
+    else:
+        rdm1_sub = rdm1
+        mo_coeff_sub = mo_coeff
     # diagonalize 1-RDM
-    e, v = np.linalg.eigh(rdm1)
+    e, v = np.linalg.eigh(rdm1_sub)
     # sort in descending order
     idx = np.argsort(e)[::-1]
     e = e[idx]
     v = v[:,idx]
     # transform to NO basis
-    no_coeff = np.dot(mo_coeff, v)
-    return no_coeff
+    no_coeff_sub = np.dot(mo_coeff_sub, v)
+    no_coeff = mo_coeff.copy()
+    if subspace is not None:
+        no_coeff[:, subspace] = no_coeff_sub
+        rdm1_new = rdm1.copy()
+        rdm1_new[subspace,:][:,subspace] = np.diag(np.ones(len(subspace))*2)
+    else:
+        no_coeff = no_coeff_sub
+        rdm1_new = np.diag(np.ones(len(rdm1))*2)
+    
+    return no_coeff, rdm1_new

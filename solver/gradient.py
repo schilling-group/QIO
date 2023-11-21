@@ -138,7 +138,7 @@ def FQI_display(gamma,Gamma,inactive_indices,verbose=True):
             
 
 def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,step_size=0.1,thresh=1e-4,
-                         max_cycle=100, logger=None):
+                         max_cycle=100, noise=1e-3, logger=None):
     
     '''
 
@@ -151,6 +151,7 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,step_size=0.1,thresh=1e-
         step_size (float): step size of gradient descent
         thresh (float): threshold of max gradient norm to stop optimization
         max_cycle (int): maximal number of cycles of jacobi rotation during orbital optimization
+        noise (float): noise added to the gradient to avoid trapping in local minima
         logger (logger): logger
 
     Returns:
@@ -167,35 +168,73 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,step_size=0.1,thresh=1e-
     #X = (np.random.rand(no,no)/2-1)/1/(1+200*np.random.rand())
     X = np.zeros((no,no))
     X = X - X.T
-    U = expm(X)
-    U_ = np.kron(U,np.eye(2))
-    gamma0 = np.einsum('ia,jb,ab->ij',U_,U_,gamma_,optimize='optimal')
-    Gamma0 = np.einsum('ia,jb,kc,ld,abcd->ijkl',U,U,U,U,Gamma_,optimize='optimal')
-    #gamma0 = gamma_.copy()
-    #Gamma0 = Gamma_.copy()
+    U0 = expm(X)
+    #U_ = np.kron(U0,np.eye(2))
+    #gamma0 = np.einsum('ia,jb,ab->ij',U_,U_,gamma_,optimize='optimal')
+    #Gamma0 = np.einsum('ia,jb,kc,ld,abcd->ijkl',U0,U0,U0,U0,Gamma_,optimize='optimal')
+    gamma0 = gamma_.copy()
+    Gamma0 = Gamma_.copy()
 
-    U_tot = U
+    U_tot = U0
     grad = np.ones((no,no))
     
     n=0
-    while np.amax(abs(grad)) > thresh and n < max_cycle:
+    cost_old = get_cost_fqi(gamma0,Gamma0,inactive_indices)
+    delta_cost = np.inf
+    #while np.max(abs(grad)) > thresh and n < max_cycle:
+    level_shift_ave = 0.
+    level_shift = level_shift_ave
+    while np.abs(delta_cost) > thresh and n < max_cycle:
         n += 1
-        grad = FQI_grad(gamma0,Gamma0,inactive_indices)    
+        grad = FQI_grad(gamma0,Gamma0,inactive_indices)
+        #print("Max grad", np.max(abs(grad)))    
         hess = FQI_hess(gamma0,Gamma0,inactive_indices)
-        level_shift = 1e-2
-        X = -grad/(hess+level_shift*np.ones((no,no))) * step_size 
+        min_hess = np.min(np.abs(hess[np.abs(hess)>1e-8]))
+        print("min_hess", min_hess)
+        level_shift_ave += min_hess
+        #level_shift = (level_shift_ave/n)/10
+        level_shift = min_hess
+        #if min_hess > np.abs(level_shift):
+        #    level_shift = -min_hess
 
+        print("n", n, "level_shift", level_shift)
+        # print the sorted nonzero entries of hess
+        #min_hess = np.min(np.abs(hess[np.abs(hess)>1e-8]))
+        #level_shift = -np.min([level_shift, min_hess])
+
+        print("hess", np.sort(np.abs(hess[np.abs(hess)>1e-8]))[:10])
+        denom = hess-level_shift*np.ones((no,no))
+        X = -np.divide(grad, denom, out=np.zeros_like(grad), where=np.abs(denom)>min_hess) * step_size 
+        #else:
+        #    print("grad is small, using gradient descent")
+        #    X = -grad * step_size*0.1
+        # put entries smaller than abs(thresh) to zero
+        #cutoff = 1e-7
+        #tmp = X[np.abs(X)<cutoff]
+        #print("np.max(np.abs(tmp)) = ", np.max(np.abs(tmp)))
+        #X[np.abs(X)<cutoff] = 0
         
         U = expm(X)
         U_tot = np.matmul(U,U_tot)
         U_ = np.kron(U,np.eye(2))
-        gamma0 = np.einsum('ia,jb,ab->ij',U_,U_,gamma0,optimize='optimal')
-        Gamma0 = np.einsum('ia,jb,kc,ld,abcd->ijkl',U,U,U,U,Gamma0,optimize='optimal')
-        cost = get_cost_fqi(gamma0,Gamma0,inactive_indices)
+        gamma0_ = np.einsum('ia,jb,ab->ij',U_,U_,gamma0,optimize='optimal')
+        Gamma0_ = np.einsum('ia,jb,kc,ld,abcd->ijkl',U,U,U,U,Gamma0,optimize='optimal')
+        cost = get_cost_fqi(gamma0_,Gamma0_,inactive_indices)
+        delta_cost = cost_old - cost
+        #if delta_cost > 0:
+            #print("cost increased, using previous orbitals")
+            #level_shift += 0.9
+            #step_size *= 0.95
+        print("step_size", step_size)  
+        
+        gamma0 = gamma0_.copy()
+        Gamma0 = Gamma0_.copy()
+
+        cost_old = cost
         if n % 1 == 0:
             if logger is not None:
-                logger.info("iteration:"+ str(n) + " max |grad| = "+str(np.amax(abs(grad))) + " cost = " +str(cost))
+                logger.info("iteration:"+ str(n) + " max |grad| = "+str(np.max(abs(grad))) + " cost = " +str(cost))
             else:
-                print("iteration", n, "max grad", np.amax(abs(grad)), "cost", cost)
+                print("iteration", n, "max grad", np.max(abs(grad)), "cost", cost)
 
     return U_tot, gamma0, Gamma0
