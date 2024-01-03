@@ -3,11 +3,16 @@ import warnings
 import logging
 
 from pyscf import lib, dmrgscf, mcscf, cc, ci, symm
-import os
+
 import numpy as np
 from solver.jacobi import minimize_orb_corr_jacobi, reorder, reorder_fast, reorder_occ
 from solver.gradient import minimize_orb_corr_GD
 from tccsd import make_tailored_ccsd, make_no
+import os
+
+dmrgscf.settings.BLOCKEXE = os.popen("which block2main").read().strip()
+dmrgscf.settings.MPIPREFIX = ''
+
 
 
 class QICAS:
@@ -30,8 +35,11 @@ class QICAS:
         """
         self.mf = mf
         self.no = len(mf.mo_coeff)
+        self.nocc = int(mf.mol.nelectron//2)
         self.n_cas, self.n_act_e = act_space
-        self.n_core = n_core
+        self.n_core = self.nocc - int(self.n_act_e//2)
+        self.active_indices = np.array(list(range(self.n_core, self.n_core+self.n_cas)))
+        self.mu = -0.5
         self.mc = mc
         self.max_cycle = 100
         self.thresh = 1e-4
@@ -45,7 +53,7 @@ class QICAS:
         self.tcc_level_shift = 0.
         self.casci_natorb = True
         self.casci_max_cycle = 300
-        self.casci_ss_shift = 0.5
+        self.casci_ss_shift = 2.0
         #
         self.verbose = mf.verbose
 
@@ -117,22 +125,57 @@ class QICAS:
             mc.tol = 1e-8
             mc.natorb = self.casci_natorb
             mc.kernel(mo_coeff.copy())
+            #mc_rdm1 = mc.fcisolver.make_rdm1()
+            #mc_rdm1 = np.einsum('ij,pi,qj->pq', mc_rdm1, mo_coeff, mo_coeff)
+            #mc_rdm2 = mc.make_rdm2()
             #mc.mo_coeff, mc.ci, occ = mc.cas_natorb(sort=False)
+
 
             
             tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
 
             self.logger.info('CASCI energy = %.6f',mc.e_tot)
-            tcc, t1, t2 = make_tailored_ccsd(tcc, mc)
+            tcc, t1, t2, is_good_ref = make_tailored_ccsd(tcc, mc)
             tcc.verbose = self.verbose
-            tcc.max_cycle = self.tcc_max_cycle
+            #tcc.max_cycle = self.tcc_max_cycle
+            mu0 = self.mu
+            if is_good_ref:
+                tcc.max_cycle = self.tcc_max_cycle
+                self.max_cycle = 30
+                #self.mu = mu0
+                #self.casci_natorb = False
+            else:
+                tcc.max_cycle = 0
+                self.max_cycle = 10
+                #self.mu = 0.
+                #self.casci_natorb = True
             tcc.level_shift = self.tcc_level_shift
             self.logger.info('mc mo energy = %s', str(mc.mo_energy))
             tcc.kernel()
+
             self.tcc_e_tot = tcc.e_tot
+            #if not is_good_ref:
+            #    n_cas = self.n_cas
+            #    cas_ncore = mc.ncore
+            #    nelec_cas = sum(mc.nelecas)
+            #    cas_nocc = nelec_cas//2
+            #    cas_nvir = n_cas - cas_nocc
+            #    nocc = mc.ncore + cas_nocc
+            #    tcc.t1[cas_ncore:nocc, :cas_nvir] = t1[cas_ncore:nocc, :cas_nvir]
+            #    tcc.t2[cas_ncore:nocc, cas_ncore:nocc, :cas_nvir, :cas_nvir] = t2[cas_ncore:nocc, cas_ncore:nocc, :cas_nvir, :cas_nvir]
             self.logger.info('TCCSD energy = %.6f',tcc.e_tot)
             dm1 = tcc.make_rdm1()
             dm2 = tcc.make_rdm2()
+
+            # calculate the number of electrons in the active space
+            n_cas = self.n_cas
+            cas_ncore = mc.ncore
+            nelec_cas = sum(mc.nelecas)
+            cas_nocc = nelec_cas//2
+            cas_nvir = n_cas - cas_nocc
+            nocc = mc.ncore + cas_nocc
+            n_act_e = np.sum(dm1.diagonal()[self.active_indices])
+            print("n_act_e", n_act_e)
 
             # make NO in inactive space 
             #n_core = (self.mf.mol.nelectron - self.n_act_e)//2
@@ -170,7 +213,7 @@ class QICAS:
             mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
             mc = dmrgci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
             edmrg = mc.kernel(mo_coeff)[0]
-            self.logger.info('DMRG energy = %6.f',edmrg)
+            self.logger.info('DMRG energy = %16.8f',edmrg)
             # the spin argument requires special modification to the local block2main code
             #dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron, spin=True) 
             dm1, dm2 = mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron) 
@@ -180,19 +223,24 @@ class QICAS:
 
         gamma,Gamma = prep_rdm12(dm1,dm2)
 
-
+        
         if method.upper() == '2D_JACOBI' or method.upper() == '2DJACOBI' or method.upper() == 'JACOBI':
             # Orbital rotation block
             _,U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
         elif method.upper() == 'NEWTON-RAPHSON' or method.upper() == 'NEWTON_RAPHSON' or method.upper() == 'NEWTON' or method.upper() == 'NR':
-            U,self.gamma,self.Gamma = minimize_orb_corr_GD(gamma,Gamma,inactive_indices, thresh=self.thresh, max_cycle=self.max_cycle, step_size=self.step_size,
-                                                            logger=self.logger)
+            U,self.gamma,self.Gamma, self.mu = minimize_orb_corr_GD(gamma,Gamma,inactive_indices, self.active_indices, mu=self.mu, target_n_ae=np.min([n_act_e, self.n_act_e]),
+                                                           thresh=self.thresh, max_cycle=self.max_cycle, step_size=self.step_size,
+                                                           logger=self.logger)
         else:
             raise NotImplementedError('Only 2d_jacobi and newton-raphson are supported')
 
         V = reorder_occ(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
         U_ = np.matmul(V,U)
         self.mo_coeff = mo_coeff @ U_.T
+        #self.mu = 0.
+        
+        #target_n_ae += (self.n_act_e - n_act_e)/2
+        
         #self.mo_coeff = symm.symmetrize_orb(self.mf.mol, self.mo_coeff)
 
         # Post-QICAS CASCI block
@@ -234,19 +282,20 @@ def dmrgci_prep(mc, mol, maxM, tol=1E-12):
     '''
     print("Using dmrg from ", dmrgscf.__file__)
     mc.fcisolver = dmrgscf.DMRGCI(mol, maxM=maxM, tol=tol)
-    mc.fcisolver.runtimeDir = lib.param.TMPDIR
-    mc.fcisolver.scratchDirectory = lib.param.TMPDIR
+    mc.fcisolver.runtimeDir = './tmp'
+    mc.fcisolver.scratchDirectory = './tmp'
     mc.fcisolver.threads = int(os.environ.get("OMP_NUM_THREADS", 8))
     mc.fcisolver.memory = int(mol.max_memory / 1000) # mem in GB
     mc.wfnsym='A1g'
     mc.canonicalization = False
     mc.natorb = False
     
-    mc.fcisolver.restart = False
-    mc.fcisolver.scheduleSweeps =[4, 4, 4, 4, 4] 
-    mc.fcisolver.scheduleMaxMs = [200, 400, 600, 800, 1000] 
-    mc.fcisolver.scheduleTols = [1e-6, 1e-6, 1e-7, 1e-7, 1e-7] 
-    mc.fcisolver.scheduleNoises = [1e-3, 1e-4, 1e-5, 1e-6, 0] 
+    mc.fcisolver.scheduleSweeps = [0, 2]#, 8] #, 12, 16]
+    mc.fcisolver.scheduleMaxMs = [250, 250]#, 250] #, 250, 250]
+    mc.fcisolver.scheduleTols = [1e-08, 1e-8]#, 1e-8] #, 1e-8, 1e-8]
+    mc.fcisolver.scheduleNoises = [0.0001, 0.0001]#, 5e-05] #, 5e-05, 0.0]
+    mc.fcisolver.maxIter = 30
+    mc.fcisolver.twodot_to_onedot = 20
     return mc
 
 

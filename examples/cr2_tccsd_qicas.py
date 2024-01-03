@@ -14,14 +14,14 @@ dmrgscf.settings.MPIPREFIX = ''
 
 n_core = 0                    # number of frozen orbitals
 ne = 24-2*n_core              # number of total electrons
-n_cas = 12                     # number of active orbitals
-n_should_close = 6            # target number of closed orbitals
+n_cas = 10                     # number of active orbitals
+n_should_close = 6           # target number of closed orbitals
 n_act_e = ne-2*n_should_close # number of active electrons
 # r = [float(sys.argv[-2])]     # list of geometry parameters
 # bd = int(sys.argv[-1])        # max bond dimension for DMRG
 r = np.arange(3.8,4.0,0.2)    # list of geometry parameters
-#r =[2.0]
-r = [2.4]
+r =[3.2]
+#r = [2.4]
 
 bd = 100
 tot_iter = 20
@@ -29,7 +29,7 @@ E_casci = np.zeros((len(r), 3+tot_iter))      # array of output data
 E_tccsd = np.zeros((len(r), tot_iter))      # array of output data
 entropy_tccsd = np.zeros((len(r), tot_iter))      # array of output data
 E_dmrg = np.zeros((len(r), tot_iter))      # array of output data
-basis = '631g'               # basis set
+basis = '321g'               # basis set
 
 
 for i in range(len(r)):
@@ -39,7 +39,7 @@ for i in range(len(r)):
     # The following code runs a HF-CASSCF and HF-CASCI from sratch for comparison
     
     mol = gto.M(atom='Cr 0 0 0; Cr 0 0 '+"{:.4}".format(r[i]), 
-        basis=basis,spin=0, verbose=1, 
+        basis=basis,spin=0, verbose=4, 
         max_memory=50000,symmetry = False) # mem in MB
     mol.unit = 'A'
     mol.build()
@@ -60,23 +60,23 @@ for i in range(len(r)):
     
     
     
-    #mol = gto.M(atom='N 0 0 0; N 0 0 '+"{:.4}".format(r[i]), 
-    #    basis=basis,spin=0, verbose=1, 
-    #    max_memory=50000,symmetry = False) # mem in MB
-    #mol.unit = 'A'
-    #mf = scf.RHF(mol)
-    #mf.kernel()
+    mol = gto.M(atom='N 0 0 0; N 0 0 '+"{:.4}".format(r[i]), 
+        basis=basis,spin=0, verbose=1, 
+        max_memory=50000,symmetry = False) # mem in MB
+    mol.unit = 'A'
+    mf = scf.RHF(mol)
+    mf.kernel()
     mycasci = mcscf.CASCI(mf,n_cas,ne-2*n_should_close)
     mycasci.verbose = 4
     mycasci.natorb = True
-    shift = 20
-    mycasci.fcisolver.max_cycle = 400
+    shift = 50
+    mycasci.fcisolver.max_cycle = 600
     mycasci.fix_spin_(ss=0, shift=shift)
     etot = mycasci.kernel(mf.mo_coeff)[0]
 
    
-    # casci energy
-    E_casci[i,2] = etot
+    ## casci energy
+    #E_casci[i,2] = etot
     # create molecule with desired geometry and basis
 
     #mol = gto.M(atom='N 0 0 0; N 0 0 '+"{:.4}".format(r[i]), 
@@ -86,11 +86,12 @@ for i in range(len(r)):
 
     # Run RHF
 
-    mf = scf.RHF(mol)
-    mf.verbose = 4
-    mf.kernel()
+    #mf = scf.RHF(mol)
+    #mf.verbose = 4
+    #mf.kernel()
     
     mo_coeff = copy.deepcopy(mycasci.mo_coeff)
+    #mo_coeff = np.load('cr2_mo_coeff_'+basis+'.npy')
     no = len(mo_coeff)-n_core
 
     t0 = time.time()
@@ -105,12 +106,12 @@ for i in range(len(r)):
     my_qicas = QICAS(mf=mf, mc=None, act_space=act_space) 
     my_qicas.max_cycle = 20
     my_qicas.max_M = bd
-    my_qicas.step_size = 0.5
-    my_qicas.thresh = 1e-6
+    my_qicas.step_size = 0.2
+    my_qicas.thresh = 1e-7
     my_qicas.casci_natorb = False
-    my_qicas.casci_ss_shift = shift
+    my_qicas.casci_ss_shift = 10.0
     my_qicas.casci_max_cycle = 400
-    my_qicas.tcc_level_shift = 0.5
+    my_qicas.tcc_level_shift = 1.0
     my_qicas.dump_flags()
     
     # get the FCI wave function in the whole space
@@ -120,11 +121,13 @@ for i in range(len(r)):
     for micro_i in range(tot_iter):
 
         if micro_i < 1:
-            my_qicas.tcc_max_cycle = 0
-            my_qicas.max_cycle = 10
-        else:
-            my_qicas.tcc_max_cycle = 50
+            my_qicas.tcc_max_cycle = 100
             my_qicas.max_cycle = 30
+            my_qicas.casci_natorb = True
+        else:
+            my_qicas.tcc_max_cycle = 100
+            my_qicas.max_cycle = 30
+            my_qicas.casci_natorb = False 
 
         e_qicas = my_qicas.kernel(is_tcc=True,  inactive_indices=inactive_indices,
             mo_coeff=mo_coeff, method='nr')
@@ -169,6 +172,7 @@ for i in range(len(r)):
         #np.savetxt("c2_dmrg_tccsd_qiorb_energy_"+basis+".scan.txt", np.asarray(E_dmrg))
     t1 = time.time()
     print('icas time:',t1-t0)
+    np.save('cr2_mo_coeff_'+basis+'.npy', mo_coeff)
 
 
 

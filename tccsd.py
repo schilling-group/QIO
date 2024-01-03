@@ -14,7 +14,26 @@ from pyscf.mp.mp2 import _mo_without_core
 
 einsum = partial(np.einsum, optimize=True)
 
-def make_tailored_ccsd(cc, cas):
+def set_zero_active_t1t2(t1, t2, nocc, nvir, ncore):
+    """
+    Set the active amplitudes to zero.
+    
+    Args:
+        t1 (ndarray): T1 amplitudes
+        t2 (ndarray): T2 amplitudes
+        nocc (int): Number of occupied orbitals
+        nvir (int): Number of virtual orbitals
+        ncore (int): Number of core orbitals
+    
+    Returns:
+        t1 (ndarray): T1 amplitudes
+        t2 (ndarray): T2 amplitudes
+    """
+    t1[ncore:nocc, :nvir] = 0.
+    t2[ncore:nocc, ncore:nocc, :nvir, :nvir] = 0.
+    return t1, t2
+
+def make_tailored_ccsd(cc, cas, is_dmrg=False):
     """Create tailored CCSD calculation."""
 
     nelec_cas = sum(cas.nelecas)
@@ -30,6 +49,7 @@ def make_tailored_ccsd(cc, cas):
     ovlp = cc._scf.get_ovlp()
     pocc = np.linalg.multi_dot((mo_cc_occ.T, ovlp, mo_cas_occ))
     pvir = np.linalg.multi_dot((mo_cc_vir.T, ovlp, mo_cas_vir))
+    is_good_ref = True
 
     def find_ref_det(cas):
         """
@@ -75,10 +95,12 @@ def make_tailored_ccsd(cc, cas):
 
     def get_cas_t1t2(cas):
         """Get T1 and T2 amplitudes from FCI wave function."""
+        is_good_ref = True
         cisdvec = pyscf.ci.cisd.from_fcivec(cas.ci, cas.ncas, nelec_cas)
         c0, c1, c2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, cas.ncas, nocc_cas)
         c1_max = np.max(np.abs(c1))
         print("|C0| = %.4e, |C1_max| = %.4e" % (np.abs(c0), c1_max))
+
         #while np.abs(c0) < c1_max or abs(c0) < 2e-3:
         #    print("Warning: |C0| = %.4e is smaller than |C1_max| = %.4e. Current choice of reference determinant is bad!" % (np.abs(c0), c1_max))
         #    print("Trying to find a better reference determinant in the singles space...")
@@ -94,13 +116,14 @@ def make_tailored_ccsd(cc, cas):
         #    print("|C0| = %.4e, |C1_max| = %.4e" % (np.abs(c0), c1_max))
 
         assert (abs(c0) > 1e-8)
-        if (abs(c0) < 2e-3):
+        if (abs(c0) < 1e-1):
+            is_good_ref = False
             print("Warning: |C0| = %.4e is too small for TCCSD. Current orbitals are a bad guess!" % np.abs(c0))
         t1 = c1/c0
         t2 = c2/c0 - einsum('ia,jb->ijab', t1, t1)
-        return t1, t2
+        return t1, t2, is_good_ref
 
-    t1cas_fci, t2cas_fci = get_cas_t1t2(cas)
+    t1cas_fci, t2cas_fci, is_good_ref = get_cas_t1t2(cas)
     t1_init = einsum('ia,Ii,Aa->IA', t1cas_fci, pocc, pvir)
     t2_init = einsum('ijab,Ii,Jj,Aa,Bb->IJAB', t2cas_fci, pocc, pocc, pvir, pvir)
 
@@ -151,11 +174,10 @@ def make_tailored_ccsd(cc, cas):
 
 
 
-
     cc.callback = callback
     cc.make_rdm1 = make_rdm1
     cc.make_rdm2 = make_rdm2
-    return cc, t1_init, t2_init 
+    return cc, t1_init, t2_init, is_good_ref 
 
 def make_no(rdm1, mo_coeff, subspace=None):
     """
