@@ -55,7 +55,8 @@ def act_occ_grad(gamma,i,j,active_indices):
     return np.array(docc)
 
 
-def orb_entr_grad(gamma,Gamma,i,j,inactive_indices):
+
+def orb_entr_grad(gamma,Gamma,i,j,inactive_indices, active_indices):
     dg = gamma_grad_diag(gamma,i,j)
     dG = Gamma_grad_diag(Gamma,i,j)
     dS = []
@@ -71,18 +72,22 @@ def orb_entr_grad(gamma,Gamma,i,j,inactive_indices):
             dg[2*k+1]-dG[k],
             dG[k]])
 
-        
-
-        #spec = np.array([1-gamma[2*k,2*k],gamma[2*k,2*k],1-gamma[2*k+1,2*k+1],gamma[2*k+1,2*k+1]])
-        #dspec = np.array([-dg[2*k],dg[2*k],-dg[2*k+1],dg[2*k+1]])
-
         dS.append(-np.dot(np.log(spec[spec>0]),dspec[spec>0]))   # vN entropy
-        #dS.append(-2*np.dot(spec,dspec))
 
     
     return np.array(dS)
 
-def orb_entr_hess(gamma,Gamma,i,j,inactive_indices):
+def act_occ_hess(gamma,i,j,active_indices):
+    dg = gamma_grad_diag(gamma,i,j)
+    ddg = gamma_hess_diag(gamma,i,j)
+    ddocc = []
+    intersection = set(active_indices).intersection({i,j})
+    for k in intersection:
+        ddocc.append(ddg[2*k]+ddg[2*k+1])
+
+    return np.array(ddocc)
+
+def orb_entr_hess(gamma,Gamma,i,j,inactive_indices,active_indices):
     dg = gamma_grad_diag(gamma,i,j)
     dG = Gamma_grad_diag(Gamma,i,j)
     ddg = gamma_hess_diag(gamma,i,j)
@@ -112,19 +117,19 @@ def orb_entr_hess(gamma,Gamma,i,j,inactive_indices):
     return np.array(ddS)
 
 
-def FQI_grad(gamma,Gamma,inactive_indices, active_indices, mu=0.1, target_n_ae=None):
+def FQI_grad(gamma,Gamma,inactive_indices, active_indices, mu=0.):
     no = len(Gamma)
     # In shape of X
     dX = np.zeros((no,no))
 
     for i in range(no):
         for j in range(i):
-            dX[i,j] = np.sum(orb_entr_grad(gamma,Gamma,i,j,inactive_indices))
-            dX[i,j] += mu*np.sum(act_occ_grad(gamma,i,j,active_indices))
+            dX[i,j] = np.sum(orb_entr_grad(gamma,Gamma,i,j,inactive_indices,active_indices))
+            #dX[i,j] += mu*np.sum(act_occ_grad(gamma,i,j,active_indices))
 
     return dX - dX.T
 
-def FQI_hess(gamma,Gamma,inactive_indices):
+def FQI_hess(gamma,Gamma,inactive_indices,active_indices, mu=0.):
 
     # In shape of X
     no = len(Gamma)
@@ -132,9 +137,9 @@ def FQI_hess(gamma,Gamma,inactive_indices):
 
     for i in range(no):
         for j in range(i):
-            ddX[i,j] = np.sum(orb_entr_hess(gamma,Gamma,i,j,inactive_indices))
+            ddX[i,j] = np.sum(orb_entr_hess(gamma,Gamma,i,j,inactive_indices,active_indices))
+            #ddX[i,j] += mu*np.sum(act_occ_hess(gamma,i,j,active_indices))
     
-
     return ddX + ddX.T
 
 def FQI_display(gamma,Gamma,inactive_indices,verbose=True):
@@ -145,7 +150,7 @@ def FQI_display(gamma,Gamma,inactive_indices,verbose=True):
             
 
 def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size=0.1,thresh=1e-4,
-                         max_cycle=100, mu=2., target_n_ae=None, noise=1e-3, logger=None):
+                         max_cycle=100, mu=2., mu_rate=1., target_n_ae=None, noise=1e-3, logger=None):
     
     '''
 
@@ -171,17 +176,10 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size
     '''
 
     no = len(Gamma_)
-    if target_n_ae is None:
-        mu = 0.
 
-    # Initialize a small rotation
-    #X = (np.random.rand(no,no)/2-1)/1/(1+200*np.random.rand())
     X = np.zeros((no,no))
     X = X - X.T
     U0 = expm(X)
-    #U_ = np.kron(U0,np.eye(2))
-    #gamma0 = np.einsum('ia,jb,ab->ij',U_,U_,gamma_,optimize='optimal')
-    #Gamma0 = np.einsum('ia,jb,kc,ld,abcd->ijkl',U0,U0,U0,U0,Gamma_,optimize='optimal')
     gamma0 = gamma_.copy()
     Gamma0 = Gamma_.copy()
 
@@ -191,24 +189,20 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size
     n=0
     cost_old = get_cost_fqi(gamma0,Gamma0,inactive_indices)
     delta_cost = np.inf
-    #while np.max(abs(grad)) > thresh and n < max_cycle:
     level_shift_ave = 0.
     level_shift = level_shift_ave
 
     n_ae = np.sum(np.diag(gamma0)[2*active_indices])*2
-    logger.info("initial mu = "+str(mu)+", n_ae = "+str(n_ae))
     while np.abs(delta_cost) > thresh and n < max_cycle:
         n += 1
-        grad = FQI_grad(gamma0,Gamma0,inactive_indices, active_indices, mu)
+        grad = FQI_grad(gamma0,Gamma0,inactive_indices, active_indices)
         #print("Max grad", np.max(abs(grad)))    
-        hess = FQI_hess(gamma0,Gamma0,inactive_indices)
-        min_hess = np.min(np.abs(hess[np.abs(hess)>1e-12]))
-        level_shift_ave += min_hess
-        #level_shift = (level_shift_ave/n)
+        hess = FQI_hess(gamma0,Gamma0,inactive_indices, active_indices)
+        min_hess = np.min((hess[np.abs(hess)>1e-12]))
         level_shift = min_hess
 
         denom = hess-level_shift*np.ones((no,no))
-        X = -np.divide(grad, denom, out=np.zeros_like(grad), where=np.abs(denom)>min_hess) * step_size 
+        X = -np.divide(grad, denom, out=np.zeros_like(grad), where=np.abs(denom)>1e-12) * step_size 
         
         U = expm(X)
         U_tot = np.matmul(U,U_tot)
@@ -218,8 +212,9 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size
         cost = get_cost_fqi(gamma0_,Gamma0_,inactive_indices)
         delta_cost = cost_old - cost
 
-        n_ae = np.sum(np.diag(gamma0_)[2*active_indices])*2
-        mu += (n_ae-target_n_ae)*20
+        #n_ae = np.sum(np.diag(gamma0_)[2*active_indices])*2
+        #mu += (n_ae-target_n_ae) * mu_rate
+        #mu_rate = np.max([mu_rate/2., 1.])
         
         gamma0 = gamma0_.copy()
         Gamma0 = Gamma0_.copy()
@@ -231,7 +226,7 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size
         if n % 1 == 0:
             if logger is not None:
                 logger.info("iteration:"+ str(n) + " max |grad| = "+str(np.max(abs(grad))) + " cost = " +str(cost))
-                logger.info("mu = "+str(mu)+", n_ae = "+str(n_ae))
+                #logger.info("mu = "+str(mu)+", n_ae = "+str(n_ae))
             else:
                 print("iteration", n, "max grad", np.max(abs(grad)), "cost", cost)
 
