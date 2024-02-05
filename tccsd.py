@@ -115,8 +115,9 @@ def make_tailored_ccsd(cc, cas, is_dmrg=False):
         #    print("New CI coeffs:")
         #    print("|C0| = %.4e, |C1_max| = %.4e" % (np.abs(c0), c1_max))
 
-        assert (abs(c0) > 1e-8)
-        if (abs(c0) < 1e-1):
+        assert (np.abs(c0) > 1e-8)
+        if (np.abs(c0)<c1_max) or (np.abs(c0)<1e-2):
+        #if (np.abs(c0) < 1e-1) or (np.abs(c0)<c1_max):
             is_good_ref = False
             print("Warning: |C0| = %.4e is too small for TCCSD. Current orbitals are a bad guess!" % np.abs(c0))
         t1 = c1/c0
@@ -215,3 +216,25 @@ def make_no(rdm1, mo_coeff, subspace=None):
         rdm1_new = np.diag(np.ones(len(rdm1))*2)
     
     return no_coeff, rdm1_new
+
+
+def semi_canonicalize(mf, mo_coeff, nocc):
+    """
+    Semi-canonicalize MO coefficients.
+    
+    Args:
+        mf: Mean-field object
+        mo_coeff: MO coefficients
+    """
+    from functools import reduce
+    fockao = mf.get_fock()
+    fockmo = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+    foo = fockmo[:nocc,:nocc]
+    fvv = fockmo[nocc:,nocc:]
+    _, v_canon_occ = np.linalg.eigh(foo)
+    _, v_canon_vir = np.linalg.eigh(fvv)
+    mo_coeff_occ = np.dot(mo_coeff[:,:nocc], v_canon_occ)
+    mo_coeff_vir = np.dot(mo_coeff[:,nocc:], v_canon_vir)
+    mo_coeff_semican = np.concatenate((mo_coeff_occ, mo_coeff_vir), axis=1)
+
+    return mo_coeff_semican

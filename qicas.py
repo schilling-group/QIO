@@ -39,7 +39,8 @@ class QICAS:
         self.n_cas, self.n_act_e = act_space
         self.n_core = self.nocc - int(self.n_act_e//2)
         self.active_indices = np.array(list(range(self.n_core, self.n_core+self.n_cas)))
-        self.mu = -0.5
+        self.mu = 0.
+        self.mu_rate = 1.0
         self.mc = mc
         self.max_cycle = 100
         self.thresh = 1e-4
@@ -54,6 +55,13 @@ class QICAS:
         self.casci_natorb = True
         self.casci_max_cycle = 300
         self.casci_ss_shift = 2.0
+        self.tcc = None
+        self.mc = None
+
+        # stored results
+        self.mo_coeff = None
+        self.s_val = None
+        self.occ_num = None
         #
         self.verbose = mf.verbose
 
@@ -88,7 +96,7 @@ class QICAS:
         self.logger.info("tcc_casci_natorb = %s", str(self.casci_natorb))
 
 
-    def kernel(self, inactive_indices, mo_coeff, is_tcc=False, method='newton-raphson'):
+    def kernel(self, inactive_indices, mo_coeff, is_ccsd=False,is_tcc=False, method='newton-raphson'):
 
         '''
         Performs QICAS procedure:
@@ -115,14 +123,19 @@ class QICAS:
 
         if is_tcc:
             # using TCCSD to get initial RDM1 and RDM2
+            self.mf.mo_coeff = mo_coeff.copy()
             mc = mcscf.CASCI(self.mf, self.n_cas, self.n_act_e)
+            #mo_coeff = mc.sort_mo(list(range(1,11,1)))
             #mc.frozen = self.n_core
             mc.verbose = self.verbose
             mc.canonicalization = True
             mc.sorting_mo_energy = False 
             mc.fcisolver.max_cycle = self.casci_max_cycle
             mc.fix_spin_(ss=0, shift=self.casci_ss_shift)
+            #mc.fix_spin_(ss=0)
             mc.tol = 1e-8
+            mc.fcisolver.level_shift = 0.1
+            mc.fcisolver.threads = 1
             mc.natorb = self.casci_natorb
             mc.kernel(mo_coeff.copy())
             #mc_rdm1 = mc.fcisolver.make_rdm1()
@@ -132,28 +145,32 @@ class QICAS:
 
 
             
-            tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
+            self.tcc = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
 
             self.logger.info('CASCI energy = %.6f',mc.e_tot)
-            tcc, t1, t2, is_good_ref = make_tailored_ccsd(tcc, mc)
-            tcc.verbose = self.verbose
+            self.tcc, t1, t2, is_good_ref = make_tailored_ccsd(self.tcc, mc)
+            self.tcc.verbose = self.verbose
             #tcc.max_cycle = self.tcc_max_cycle
+            max_cycle = self.max_cycle
             mu0 = self.mu
             if is_good_ref:
-                tcc.max_cycle = self.tcc_max_cycle
-                self.max_cycle = 30
+                self.tcc.max_cycle = self.tcc_max_cycle
+                self.max_cycle = max_cycle 
                 #self.mu = mu0
                 #self.casci_natorb = False
             else:
-                tcc.max_cycle = 0
+                self.tcc.max_cycle = 0
                 self.max_cycle = 10
                 #self.mu = 0.
                 #self.casci_natorb = True
-            tcc.level_shift = self.tcc_level_shift
-            self.logger.info('mc mo energy = %s', str(mc.mo_energy))
-            tcc.kernel()
+            self.tcc.level_shift = self.tcc_level_shift
+            #tcc.diis_start_cycle = 10
+            #tcc.direct = True
+            #tcc.diis_space = 20
+            #self.logger.info('mc mo energy = %s', str(mc.mo_energy))
+            self.tcc.kernel()
 
-            self.tcc_e_tot = tcc.e_tot
+            self.tcc_e_tot = self.tcc.e_tot
             #if not is_good_ref:
             #    n_cas = self.n_cas
             #    cas_ncore = mc.ncore
@@ -163,19 +180,13 @@ class QICAS:
             #    nocc = mc.ncore + cas_nocc
             #    tcc.t1[cas_ncore:nocc, :cas_nvir] = t1[cas_ncore:nocc, :cas_nvir]
             #    tcc.t2[cas_ncore:nocc, cas_ncore:nocc, :cas_nvir, :cas_nvir] = t2[cas_ncore:nocc, cas_ncore:nocc, :cas_nvir, :cas_nvir]
-            self.logger.info('TCCSD energy = %.6f',tcc.e_tot)
-            dm1 = tcc.make_rdm1()
-            dm2 = tcc.make_rdm2()
+            self.logger.info('TCCSD energy = %.6f',self.tcc.e_tot)
+            dm1 = self.tcc.make_rdm1()
+            dm2 = self.tcc.make_rdm2()
 
             # calculate the number of electrons in the active space
-            n_cas = self.n_cas
-            cas_ncore = mc.ncore
-            nelec_cas = sum(mc.nelecas)
-            cas_nocc = nelec_cas//2
-            cas_nvir = n_cas - cas_nocc
-            nocc = mc.ncore + cas_nocc
             n_act_e = np.sum(dm1.diagonal()[self.active_indices])
-            print("n_act_e", n_act_e)
+            self.logger.info("Number of active electrons = %.6f", n_act_e)
 
             # make NO in inactive space 
             #n_core = (self.mf.mol.nelectron - self.n_act_e)//2
@@ -207,7 +218,40 @@ class QICAS:
                 occ, _ = np.linalg.eigh(dm1)
                 if np.any(occ < 0):
                     raise ValueError("Negative eigenvalues in dm1")
+        elif is_ccsd:
+            from pyscf.ci import cisd
+            ccsd = cc.CCSD(self.mf, mo_coeff=mo_coeff.copy())
+            ccsd.verbose = self.verbose
+            ccsd.level_shift = self.tcc_level_shift
+            ccsd.max_cycle = self.tcc_max_cycle
+            ccsd.kernel()
 
+            def make_rdm1():
+                """Make 1-RDM using C1 and C2 from CCSD"""
+                t1, t2 = ccsd.t1, ccsd.t2
+                c0 = 1.
+                c1 = t1.copy()
+                c2 = t2 + np.einsum('ia,jb->ijab', t1, t1) 
+                mycisd = cisd.CISD(ccsd._scf)
+                cisdvec = cisd.amplitudes_to_cisdvec(c0, c1, c2)
+                cisdvec /= np.linalg.norm(cisdvec)
+                return mycisd.make_rdm1(cisdvec)
+
+            def make_rdm2():
+                """Make 2-RDM using C1 and C2 from CCSD"""
+                t1, t2 = ccsd.t1, ccsd.t2
+                c0 = 1.
+                c1 = t1
+                c2 = t2 + np.einsum('ia,jb->ijab', t1, t1) 
+                mycisd = cisd.CISD(ccsd._scf)
+                cisdvec = cisd.amplitudes_to_cisdvec(c0, c1, c2)
+                cisdvec /= np.linalg.norm(cisdvec)
+                return mycisd.make_rdm2(cisdvec)
+            ccsd.make_rdm1 = make_rdm1
+            ccsd.make_rdm2 = make_rdm2
+            dm1 = ccsd.make_rdm1()
+            dm2 = ccsd.make_rdm2()
+            self.tcc_e_tot = ccsd.e_tot
         else:
             # DMRG and RDMs prep block
             mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
@@ -228,37 +272,19 @@ class QICAS:
             # Orbital rotation block
             _,U,self.gamma,self.Gamma = minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,self.max_cycle)
         elif method.upper() == 'NEWTON-RAPHSON' or method.upper() == 'NEWTON_RAPHSON' or method.upper() == 'NEWTON' or method.upper() == 'NR':
-            U,self.gamma,self.Gamma, self.mu = minimize_orb_corr_GD(gamma,Gamma,inactive_indices, self.active_indices, mu=self.mu, target_n_ae=np.min([n_act_e, self.n_act_e]),
+            U,self.gamma,self.Gamma, self.mu = minimize_orb_corr_GD(gamma,Gamma,inactive_indices, self.active_indices, mu=self.mu, mu_rate=self.mu_rate,
                                                            thresh=self.thresh, max_cycle=self.max_cycle, step_size=self.step_size,
                                                            logger=self.logger)
         else:
             raise NotImplementedError('Only 2d_jacobi and newton-raphson are supported')
 
-        V = reorder_occ(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
+        V, self.s_val, self.occ_num = reorder_occ(self.gamma.copy(),self.Gamma.copy(),self.n_cas)
         U_ = np.matmul(V,U)
         self.mo_coeff = mo_coeff @ U_.T
         #self.mu = 0.
-        
         #target_n_ae += (self.n_act_e - n_act_e)/2
-        
-        #self.mo_coeff = symm.symmetrize_orb(self.mf.mol, self.mo_coeff)
-
-        # Post-QICAS CASCI block
-        #mycas = mcscf.CASCI(self.mf,self.n_cas, self.n_act_e)
-        ##mycas.frozen = self.n_core
-        #mycas.fix_spin_(ss=0)
-        #mycas.canonicalization = True
-        #mycas.max_cycle = self.casci_max_cycle
-        #mycas.natorb = self.casci_natorb
-        #mycas.sorting_mo_energy = False 
-        #mycas.verbose = self.verbose
-        etot = mc.e_tot
-        #dm1 = mycas.make_rdm1()
-        ##dm2 = mycas.make_rdm2()
-        #gamma, Gamma = prep_rdm12(dm1,dm2)
-        #P = reorder_occ(gamma,Gamma,self.n_cas)
-        #self.mo_coeff = np.dot(self.mo_coeff,P)
-
+        etot = 0.
+        #etot = mc.e_tot
 
 
         return etot
