@@ -2,7 +2,7 @@
 Module for DMRG solver, including the function to prepare a DMRGCI object
 and some other tools.
 """
-from pyscf import mcscf, dmrgscf
+from pyscf import dmrgscf
 import os
 # DMRG and RDMs prep block
 
@@ -12,71 +12,62 @@ dmrgscf.settings.MPIPREFIX = ''
 if dmrgscf.settings.BLOCKEXE == '':
     raise FileNotFoundError("block2main not found")
 
-mc = mcscf.CASCI(self.mf, self.no, self.mf.mol.nelectron)
-mc = dmrgci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
-edmrg = mc.kernel(mo_coeff)[0]
+class DMRG:
+    """
+    DMRG solver class
 
-class DMRGMC:
-    def __init__(self, mf, max_M):
+    This is a wrapper for the pyscf DMRGCI solver. It is used to prepare the
+    solver object and to store the 1- and 2-RDMs.
+
+    See the documentation of block2 and pyscf for more details.
+    """
+
+    def __init__(self, mf, mc, max_M=200, tol=1E-12):
         """
-        Attributes:
-            mf (pyscf mf object): mf object
+        Args:
+            mf (pyscf.scf object): mean-field object
+            mc: solver for obtaining 1- and 2-RDM
             max_M (int): max bond dimension in DMRG
+            tol (float): tolerance for DMRG convergence
         """
         self.mf = mf
+        self.no = len(mf.mo_coeff)
         self.max_M = max_M
+        self.mc = mc
+        self.mc.fcisolver = dmrgscf.DMRGCI(mf.mol, maxM=max_M, tol=tol)
+        self.mc.fcisolver.runtimeDir = './'
+        self.mc.fcisolver.scratchDirectory = './tmp'
+        self.mc.fcisolver.threads = int(os.environ.get("OMP_NUM_THREADS", 1))
+        self.mc.fcisolver.memory = int(mf.mol.max_memory / 1000) # mem in GB
+        self.mc.wfnsym='A1g'
+        self.mc.canonicalization = False
+        self.mc.natorb = False
+    
+        self.mc.fcisolver.scheduleSweeps = [0, 4]
+        self.mc.fcisolver.scheduleMaxMs = [150, 150] 
+        self.mc.fcisolver.scheduleTols = [1e-08, 1e-8]
+        self.mc.fcisolver.scheduleNoises = [0.0001, 0.0001]
+        self.mc.fcisolver.maxIter = 30
+        self.mc.fcisolver.twodot_to_onedot = 20
+        
+        # dm1 and dm2
+        self.dm1 = None
+        self.dm2 = None
 
+        self.e_tot = None
+    
     def kernel(self, mo_coeff=None):
-        """
-        Run DMRG calculation.
-
-        Args:
-            mo_coeff (ndarray): MO coefficients
-
-        Returns:
-            e_tot (float): Total DMRG energy
-        """
         if mo_coeff is None:
             mo_coeff = self.mf.mo_coeff
-        mc = mcscf.CASCI(self.mf, self.mf.mol.nelectron, self.mf.mol.nelectron)
-        mc = dmrgci_prep(mc=mc, mol=self.mf.mol, maxM=self.max_M, tol=1e-5)
-        return mc.kernel(mo_coeff)[0]
-
+        self.e_tot = self.mc.kernel(mo_coeff)[0]
+        return self.e_tot
+    
     def make_rdm1(self):
-        """Make 1-RDM using DMRG from block2"""
+        if self.dm1 is None:
+            self.dm1, self.dm2 = self.mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron)
+        return self.dm1
     
     def make_rdm2(self):
-        """Make 2-RDM using DMRG from block2"""
-
-def dmrgci_prep(mc, mol, maxM, tol=1E-12):
-
-    '''
-    Prepare a dmrgci object
-
-    Args:
-        mc: a pyscf casci object
-        mol: a pyscf mol object
-        maxM (int): maximal bond dimension
-        stages (int or list): stages specifications [bond_dim, n_sweeps, noise]
-        tol: schedueled tolerance for termination of DMRG sweeps
-
-    Returns:
-        mc: target casci object 
-
-    '''
-    mc.fcisolver = dmrgscf.DMRGCI(mol, maxM=maxM, tol=tol)
-    mc.fcisolver.runtimeDir = './tmp'
-    mc.fcisolver.scratchDirectory = './tmp'
-    mc.fcisolver.threads = int(os.environ.get("OMP_NUM_THREADS", 1))
-    mc.fcisolver.memory = int(mol.max_memory / 1000) # mem in GB
-    mc.wfnsym='A1g'
-    mc.canonicalization = False
-    mc.natorb = False
-    
-    mc.fcisolver.scheduleSweeps = [0, 2]#, 8] #, 12, 16]
-    mc.fcisolver.scheduleMaxMs = [250, 250]#, 250] #, 250, 250]
-    mc.fcisolver.scheduleTols = [1e-08, 1e-8]#, 1e-8] #, 1e-8, 1e-8]
-    mc.fcisolver.scheduleNoises = [0.0001, 0.0001]#, 5e-05] #, 5e-05, 0.0]
-    mc.fcisolver.maxIter = 30
-    mc.fcisolver.twodot_to_onedot = 20
-    return mc
+        if self.dm2 is None:
+            self.dm1, self.dm2 = self.mc.fcisolver.make_rdm12(0, self.no, self.mf.mol.nelectron)
+        return self.dm2
