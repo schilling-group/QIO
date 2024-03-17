@@ -2,24 +2,16 @@ from pyscf import gto, scf, dmrgscf, mcscf, cc, fci
 from pyscf.tools import fcidump
 import os, copy
 import numpy as np
-from qicas import QICAS, prep_rdm12
+from qio import QIO, prep_rdm12
 from solver.gradient import get_cost_fqi
 import time
-from tccsd import make_no, make_tailored_ccsd
-from dmrg_block2 import run_dmrg
-
-dmrgscf.settings.BLOCKEXE = os.popen("which block2main").read().strip()
-dmrgscf.settings.MPIPREFIX = ''
-
+from qio.solver.tccsd import make_no, make_tailored_ccsd
 
 n_core = 0                    # number of frozen orbitals
 ne = 14-2*n_core              # number of total electrons
 n_cas = 8                     # number of active orbitals
 n_should_close = 2            # target number of closed orbitals
 n_act_e = ne-2*n_should_close # number of active electrons
-# r = [float(sys.argv[-2])]     # list of geometry parameters
-# bd = int(sys.argv[-1])        # max bond dimension for DMRG
-#r = np.arange(6.0,6.1,0.2)    # list of geometry parameters
 r =[2.0, 6.0]
 
 bd = 200

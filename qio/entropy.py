@@ -1,4 +1,5 @@
 import numpy as np
+from warnings import warn
 
 def shannon(spec):
     '''
@@ -10,13 +11,10 @@ def shannon(spec):
     Returns:
         S (float): Shannon entropy of spec
     '''
-    # FIXME: can spec be negative? if yes, is it ok to just discard the negative part?
     spec = np.asarray(spec)
     if np.any(spec < 0):
         if np.any(np.abs(spec[spec < 0]) > 1e-6):
-            print("Warning: spec has negative entries!")
-            print(spec[spec<0])
-            #raise ValueError("spec has negative entries")
+            warn("Warning: spec has negative entries!")
     elif np.any(spec > 1):
         print(spec)
         raise ValueError("spec has entries larger than 1")
@@ -26,7 +24,7 @@ def shannon(spec):
 def get_cost_fqi(gamma, Gamma, inactive_indices):
 
     '''
-    Sum of all inactive orbita entropy
+    Sum of all inactive orbital entropy
 
     Args:
         gamma (ndarray): current 1RDM
@@ -44,7 +42,6 @@ def get_cost_fqi(gamma, Gamma, inactive_indices):
     nd = gamma[2*inds+1, 2*inds+1]
     nn = Gamma[inds, inds, inds, inds]
     spec = np.array([1-nu-nd+nn, nu-nn, nd-nn, nn])
-    #spec = np.clip(spec, a_min=1e-15, a_max=None)
-    #cost_fun = -np.sum(spec * np.log(spec), axis=0)
     cost_fun = shannon(spec)
+    
     return np.sum(cost_fun)

@@ -2,7 +2,7 @@ import sys
 
 import numpy as np
 from pyscf import gto, scf, cc, mcscf
-from tccsd import make_tailored_ccsd
+from qio.solver.tccsd import make_tailored_ccsd
 
 def test_energy():
     t1 = t2 = None

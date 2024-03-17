@@ -2,10 +2,13 @@ import numpy as np
 import sys
 from scipy.linalg import expm
 
-from entropy import get_cost_fqi
+import logging
+
+from qio.entropy import get_cost_fqi
 
 np.set_printoptions(threshold=sys.maxsize)
 
+logger = logging.getLogger('qio')
 
 def gamma_grad_diag(gamma,i,j):
     no = len(gamma)
@@ -144,13 +147,13 @@ def FQI_hess(gamma,Gamma,inactive_indices,active_indices, mu=0.):
 
 def FQI_display(gamma,Gamma,inactive_indices,verbose=True):
     cost_ = get_cost_fqi(gamma, Gamma, inactive_indices)
-    print('FQI cost: ', cost_)
+    logger.info('FQI cost: ', cost_)
 
     return cost_
             
 
-def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size=0.1,thresh=1e-4,
-                         max_cycle=100, mu=2., mu_rate=1., target_n_ae=None, noise=1e-3, logger=None):
+def minimize_orb_corr_GD(gamma_, Gamma_, inactive_indices, active_indices, step_size=0.1, thresh=1e-4,
+                         max_cycle=100, level_shift=1e-3, mu=2., mu_rate=1., target_n_ae=None, noise=1e-3):
     
     '''
 
@@ -163,9 +166,9 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size
         step_size (float): step size of gradient descent
         thresh (float): threshold of max gradient norm to stop optimization
         max_cycle (int): maximal number of cycles of jacobi rotation during orbital optimization
+        level_shift (float): level shift in the diagonal of the hessian
         mu (float): lagrangian multiplier for the electron number constraint
         noise (float): noise added to the gradient to avoid trapping in local minima
-        logger (logger): logger
 
     Returns:
         rotations (list): history of jacobi rotations (orbital_i, orbital_j, rotational_angle)
@@ -199,7 +202,7 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size
         #print("Max grad", np.max(abs(grad)))    
         hess = FQI_hess(gamma0,Gamma0,inactive_indices, active_indices)
         min_hess = np.min((hess[np.abs(hess)>1e-12]))
-        level_shift = min_hess
+        level_shift += min_hess 
 
         denom = hess-level_shift*np.ones((no,no))
         X = -np.divide(grad, denom, out=np.zeros_like(grad), where=np.abs(denom)>1e-12) * step_size 
@@ -224,10 +227,6 @@ def minimize_orb_corr_GD(gamma_,Gamma_,inactive_indices,active_indices,step_size
 
         cost_old = cost
         if n % 1 == 0:
-            if logger is not None:
-                logger.info("iteration:"+ str(n) + " max |grad| = "+str(np.max(abs(grad))) + " cost = " +str(cost))
-                #logger.info("mu = "+str(mu)+", n_ae = "+str(n_ae))
-            else:
-                print("iteration", n, "max grad", np.max(abs(grad)), "cost", cost)
+            logger.info("iteration:"+ str(n) + " max |grad| = "+str(np.max(abs(grad))) + " cost = " +str(cost))
 
     return U_tot, gamma0, Gamma0, mu

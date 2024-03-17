@@ -2,10 +2,10 @@ from pyscf import gto, scf, dmrgscf, mcscf, cc, fci
 from pyscf.tools import fcidump
 import os, copy
 import numpy as np
-from qicas import QICAS, prep_rdm12
+from qio import QIO, prep_rdm12
 from solver.gradient import get_cost_fqi
 import time
-from tccsd import make_no, make_tailored_ccsd
+from qio.solver.tccsd import make_no, make_tailored_ccsd
 from dmrg_block2 import run_dmrg
 
 dmrgscf.settings.BLOCKEXE = os.popen("which block2main").read().strip()
@@ -103,16 +103,16 @@ for i in range(len(r)):
     inactive_indices = list(range(no))
     act_space = (n_cas,ne-2*n_should_close)
    
-    my_qicas = QICAS(mf=mf, mc=None, act_space=act_space) 
-    my_qicas.max_cycle = 20
-    my_qicas.max_M = bd
-    my_qicas.step_size = 0.2
-    my_qicas.thresh = 1e-7
-    my_qicas.casci_natorb = False
-    my_qicas.casci_ss_shift = 10.0
-    my_qicas.casci_max_cycle = 400
-    my_qicas.tcc_level_shift = 1.0
-    my_qicas.dump_flags()
+    my_qio = QIO(mf=mf, mc=None, act_space=act_space) 
+    my_qio.max_cycle = 20
+    my_qio.max_M = bd
+    my_qio.step_size = 0.2
+    my_qio.thresh = 1e-7
+    my_qio.casci_natorb = False
+    my_qio.casci_ss_shift = 10.0
+    my_qio.casci_max_cycle = 400
+    my_qio.tcc_level_shift = 1.0
+    my_qio.dump_flags()
     
     # get the FCI wave function in the whole space
 
@@ -121,51 +121,22 @@ for i in range(len(r)):
     for micro_i in range(tot_iter):
 
         if micro_i < 1:
-            my_qicas.tcc_max_cycle = 100
-            my_qicas.max_cycle = 30
-            my_qicas.casci_natorb = True
+            my_qio.tcc_max_cycle = 100
+            my_qio.max_cycle = 30
+            my_qio.casci_natorb = True
         else:
-            my_qicas.tcc_max_cycle = 100
-            my_qicas.max_cycle = 30
-            my_qicas.casci_natorb = False 
+            my_qio.tcc_max_cycle = 100
+            my_qio.max_cycle = 30
+            my_qio.casci_natorb = False 
 
-        e_qicas = my_qicas.kernel(is_tcc=True,  inactive_indices=inactive_indices,
+        e_qicas = my_qio.kernel(is_tcc=True,  inactive_indices=inactive_indices,
             mo_coeff=mo_coeff, method='nr')
-        mo_coeff = my_qicas.mo_coeff.copy()
+        mo_coeff = my_qio.mo_coeff.copy()
 
-        # construct TCCSD natural orbitals
-        #mc = mcscf.CASCI(mf, n_cas, n_act_e)
-        ##mc.frozen = self.n_core
-        #mc.verbose = mf.verbose
-        #mc.canonicalization = True 
-        #mc.sorting_mo_energy = True
-        #mc.fix_spin_(ss=0)
-        #mc.tol = 1e-8
-        ##mc.natorb = self.tcc_casci_natorb
-        #mc.kernel(mo_coeff.copy())
-        #tcc = cc.CCSD(mf, mo_coeff=mo_coeff.copy())
-
-        #tcc, t1, t2 = make_tailored_ccsd(tcc, mc)
-        #tcc.verbose = mf.verbose
-        #tcc.kernel()
-        
-        # dump fcidump
-        #fcidump.from_mo(mf.mol, 'fcidump', mo_coeff)
-        ## do a fixed-bond dimension DMRG calculation
-        #e_dmrg = run_dmrg(fcidump_file='fcidump')
-        #E_dmrg[i, micro_i] = e_dmrg
-
-        #dm1 = tcc.make_rdm1()
-        #dm2 = tcc.make_rdm2()
-        #mo_coeff = make_no(dm1, mo_coeff)
-
-        #E_tccsd[i, micro_i] = tcc.e_tot
-        E_tccsd[i, micro_i] = my_qicas.tcc_e_tot
+        E_tccsd[i, micro_i] = my_qio.tcc_e_tot
 
 
-        #gamma, Gamma = prep_rdm12(dm1,dm2)
-
-        entropy_tccsd[i, micro_i] = get_cost_fqi(my_qicas.gamma, my_qicas.Gamma, inactive_indices)
+        entropy_tccsd[i, micro_i] = get_cost_fqi(my_qio.gamma, my_qio.Gamma, inactive_indices)
         #entropy_tccsd[i, micro_i] = get_cost_fqi(gamma, Gamma, inactive_indices)
         np.savetxt('cr2_tccsd_energy_'+basis+'.12in12.1.txt',E_tccsd)
         np.savetxt("cr2_tccsd_entropy_"+basis+".12in12.1.txt", np.asarray(entropy_tccsd))
@@ -173,14 +144,3 @@ for i in range(len(r)):
     t1 = time.time()
     print('icas time:',t1-t0)
     np.save('cr2_mo_coeff_'+basis+'.npy', mo_coeff)
-
-
-
-print('r\tHF-CAS(8,8)\tCASSCF(8,8)\tQICAS-CASCI')
-print(E_casci)
-print('r\tTCCSD')
-print(E_tccsd)
-
-
-
-

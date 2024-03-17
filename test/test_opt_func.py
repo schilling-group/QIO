@@ -1,8 +1,8 @@
 import sys
 
 import numpy as np
-from qicas import prep_rdm12
-from old_code.tools import gamma_Gamma_prep
+from qio import prep_rdm12
+from qio import gamma_Gamma_prep
 from solver.jacobi import cost_full
 
 def prep_rand_rdm12(no=5):

@@ -1,8 +1,7 @@
 from pyscf import gto, scf, dmrgscf, mcscf
 import os,sys,copy
 import numpy as np
-from qicas import *
-from orb_rot import *
+from qio import *
 import time
 
 
