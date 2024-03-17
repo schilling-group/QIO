@@ -1,4 +1,4 @@
-from pyscf import gto, scf, dmrgscf, mcscf
+from pyscf import gto, scf, mcscf
 import os, copy
 import numpy as np
 from qio import QIO
@@ -23,11 +23,6 @@ basis = 'cc-pVDZ-DK'               # basis set
 
 
 for i in range(len(r)):
-    print('r=',r[i])
-    E_casci[i,0] = r[i]
-
-    # The following code runs a HF-CASSCF and HF-CASCI from sratch for comparison
-    
     mol = gto.M(atom='Cr 0 0 0; Cr 0 0 '+"{:.4}".format(r[i]), 
         basis=basis,spin=0, verbose=4, 
         max_memory=50000,symmetry = False, unit='A') # mem in MB
@@ -42,7 +37,6 @@ for i in range(len(r)):
 
     t0 = time.time()
 
-    # Run QICAS and output post-QICAS CASCI energy
     active_indices = []
     inactive_indices = list(range(no))
     act_space = (n_cas,ne-2*n_should_close)
