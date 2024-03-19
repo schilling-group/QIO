@@ -17,7 +17,12 @@ block2
 ```
 
 ## Usage
-Please see examples.
+Import qio as a module to use all its functions and classes
+```Python
+import qio
+```
+
+Please see examples for detailed usage.
 
 Solvers other than the provided DMRG or TCCSD can be used, as long as you design a wrapper sticking to the standard as in these two, i.e. it should include the following member functions
 
