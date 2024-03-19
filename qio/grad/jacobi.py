@@ -3,10 +3,13 @@ import copy
 import sys
 from scipy.linalg import expm
 
-from entropy import shannon, get_cost_fqi
+import logging
+
+from qio.entropy import shannon, get_cost_fqi
 
 np.set_printoptions(threshold=sys.maxsize)
 
+logger = logging.getLogger('qio')
 
 
 def jacobi_cost(theta,i,j,rdm1,rdm2,inactive_indices):
@@ -201,14 +204,12 @@ def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,max_cycle):
 
     rotations = []
 
-    
-    
-    print('Optimizig Active Space...')
+    logger.info('Optimizig Orbitals...')
     cost = 100
     new_cost = 100
     cycle_cost = 100
     for n in range(max_cycle):
-        print('============== Cycle '+str(n+1)+' ==============')
+        logger.info('============== Cycle '+str(n+1)+' ==============')
         orb_list = np.arange(0,no)
         np.random.shuffle(orb_list)
         for a in range(no):
@@ -233,10 +234,10 @@ def minimize_orb_corr_jacobi(gamma,Gamma,inactive_indices,max_cycle):
         
         tol = 1e-7
         if cycle_cost - new_cost < tol:
-            print('reached tol =',tol)
+            logger.info('reached tol =',tol)
             break
         cycle_cost = new_cost
-        print('cost=',cycle_cost)
+        logger.info('cost=',cycle_cost)
 
     return rotations, U, gamma0, Gamma0
 
@@ -294,16 +295,16 @@ def reorder_fast(gamma, Gamma, n_cas, n_core):
     P = P[inds]
     s_val = s_val[inds]
     occ_num = occ_num[inds]
-    print("Orbital entropies =", s_val)
-    print("Orbital occupation numbers =", occ_num)
+    logger.info("Orbital entropies =", str(s_val))
+    logger.info("Orbital occupation numbers =", str(occ_num))
     if occ_num[n_core+n_cas-1] < occ_num[n_core+n_cas]:
-        print("Warning: the orbitals are not ordered correctly wrt to occupation numbers!")
+        logger.info("Warning: the orbitals are not ordered correctly wrt to occupation numbers!")
     assert np.allclose(P @ s_val_init, s_val)
 
     return P
 
 
-def reorder_occ(gamma,Gamma,N_cas):
+def reorder_occ(gamma, Gamma):
     """
     Reorders orbitals occording to their occupation numbers
     """
@@ -320,10 +321,12 @@ def reorder_occ(gamma,Gamma,N_cas):
     s_val = s_val[inds]
     occ_num = occ_num[inds]
     
-    print("Orbital entropies =", s_val)
-    print("Orbital occupation numbers =", occ_num)
+    logger.info("Orbital entropies =")
+    logger.info(s_val)
+    logger.info("Orbital occupation numbers =")
+    logger.info(str(occ_num))
 
-    return P
+    return P, s_val, occ_num
 
 
     
@@ -412,8 +415,8 @@ def reorder(gamma,Gamma,N_cas):
                 V = np.matmul(V_,V)
 
 
-    print(S1,N1)
-    print('n_closed =',n_closed)
+    logger.info(S1,N1)
+    logger.info('n_closed =',n_closed)
     return rotations, n_closed, V
 
 
