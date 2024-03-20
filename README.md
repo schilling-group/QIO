@@ -27,9 +27,13 @@ import qio
 Solvers other than the provided DMRG or TCCSD can be used, as long as you design a wrapper sticking to the standard as in these two, i.e. it should include the following member functions
 
 ```Python
-def kernel(mo_coeff)
-def make_rdm1()
-def make_rdm2()
+class Your_Solver:
+  def kernel(mo_coeff):
+    pass
+  def make_rdm1():
+    pass
+  def make_rdm2():
+    pass
 ```
 
 
