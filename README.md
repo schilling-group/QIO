@@ -1,6 +1,6 @@
 # Quantum Information-based Active and General Orbital Optimization (QICAS-QIO)
 
-This project realizes orbital optimization using quantum information tools. It can be used for active space and general orbital optimization.
+This project realizes orbital optimization using quantum information tools. It can be used for active space [^1] and general orbital optimization [^2].
 
 ## Installation
 First clone or download it. Then use 
@@ -35,7 +35,8 @@ def make_rdm2()
 
 Please cite the following papers if you use QICAS-QIO 
 
-1. Lexin Ding, Stefan Knecht, Christian Schilling, Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett. 14, 49, 11022–11029 (2023)
-2. Ke Liao, Lexin Ding, Christian Schilling, Unveiling Intrinsic Many-Body Complexity by Compressing Single-Body Triviality, arXiv preprint arXiv:2402.16841 (2024)
+[^1]: Lexin Ding, Stefan Knecht, Christian Schilling, Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett. 14, 49, 11022–11029 (2023)
+
+[^2]: Ke Liao, Lexin Ding, Christian Schilling, Unveiling Intrinsic Many-Body Complexity by Compressing Single-Body Triviality, arXiv preprint arXiv:2402.16841 (2024)
 
   
