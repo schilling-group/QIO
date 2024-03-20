@@ -8,7 +8,7 @@ First clone or download it. Then use
 to install. 
 
 ### Dependencies
-
+**Python version 3.11 will break some code in dmrgscf and pyscf, so suggested versions to use are Python3.8, Python3.9, Python3.10.**
 ```Python
 numpy
 scipy
