@@ -1,4 +1,4 @@
-# Quantum Information-based Active and General Orbital Optimization (QICAS-QIO)
+# Quantum Information-assisted Active and General Orbital Optimization (QICAS-QIO)
 
 This project realizes orbital optimization using quantum information tools. It can be used for active space [^1] and general orbital optimization [^2].
 
