@@ -2,7 +2,7 @@ from pyscf import gto, scf, mcscf
 import os, copy
 import numpy as np
 from qio import QIO
-from qio.grad.gradient import get_cost_fqi
+from qio.entropy import get_cost_fqi
 import time
 from qio.solver.tccsd import TCCSD
 
