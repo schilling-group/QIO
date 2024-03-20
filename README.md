@@ -14,7 +14,10 @@ numpy
 scipy
 pyscf
 block2
+dmrgscf
 ```
+
+To use the dmrg solver provided by block2, one needs to install dmrgscf manually. See the [documentation](https://block2.readthedocs.io/en/latest/user/dmrg-scf.html) of block2 on how to install it.
 
 ## Usage
 Import qio as a module to use all its functions and classes
