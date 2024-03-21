@@ -42,7 +42,7 @@ class Your_Solver:
 ```
 
 
-## How to cite
+## How to Cite
 
 When using this package for your work, please cite the following two primary references:
 
