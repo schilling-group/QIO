@@ -1,6 +1,8 @@
 # Quantum Information-assisted Active and General Orbital Optimization (QIO)
 
-This project realizes orbital optimization using quantum information tools. It encompasses a specific scheme designed for active space optimization (QICAS) [^1] and general quantum information-assisted orbital optimization (QIO) [^2].
+![qio_logo](https://github.com/schilling-group/QIO/assets/79213502/6cca564e-4cd3-47f3-9582-330333fe2b92)
+
+This project realizes orbital optimization using quantum information tools. It encompasses a specific scheme designed for active space optimization (QICAS) and general quantum information-assisted orbital optimization (QIO).
 
 ## Installation
 First clone or download it. Then use 
@@ -40,10 +42,19 @@ class Your_Solver:
 ```
 
 
-## How to Cite 
+## How to cite
 
-[^1]: Lexin Ding, Stefan Knecht, Christian Schilling, Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett. 14, 49, 11022–11029 (2023)
+When using this package for your work, please cite the following primary references:
 
-[^2]: Ke Liao, Lexin Ding, Christian Schilling, Unveiling Intrinsic Many-Body Complexity by Compressing Single-Body Triviality, arXiv preprint arXiv:2402.16841 (2024)
+**Active space orbital optimization:** 
+* Lexin Ding, Stefan Knecht, Christian Schilling. Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett. 14, 49, 11022–11029 (2023)
 
-  
+**Orbital optimization for treating both dynamic and static correlation:** 
+* Ke Liao, Lexin Ding, Christian Schilling. Unveiling Intrinsic Many-Body Complexity by Compressing Single-Body Triviality, arXiv preprint arXiv:2402.16841 (2024)
+
+Optional further references on quantum information tools in quantum chemistry:
+
+* Lexin Ding, Christian Schilling. Correlation Paradox of the Dissociation Limit: A Quantum Information Perspective. J. Chem. Theory Comput. 16, 7, 4159–4175 (2020)
+* Lexin Ding, Sam Mardazad, Sreetama Das, Zoltán Zimborás, Szilard Szálay, Ulrich Schollwöck, Christian Schilling. Concept of orbital entanglement and correlation in quantum chemistry. J. Chem. Theory Comput. 2021, 17, 1, 79–95 (2020)
+* Lexin Ding, Stefan Knecht, Zoltán Zimborás, Christian Schilling. Quantum correlations in molecules: from quantum resourcing to chemical bonding. Quantum Sci. Technol. 8 015015 (2022)
+
