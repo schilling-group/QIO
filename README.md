@@ -40,7 +40,7 @@ class Your_Solver:
 ```
 
 
-Please cite the following papers if you use QICAS-QIO 
+## How to Cite 
 
 [^1]: Lexin Ding, Stefan Knecht, Christian Schilling, Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett. 14, 49, 11022–11029 (2023)
 
