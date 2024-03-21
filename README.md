@@ -2,7 +2,7 @@
 
 ![qio_logo](https://github.com/schilling-group/QIO/assets/79213502/6cca564e-4cd3-47f3-9582-330333fe2b92)
 
-This project realizes orbital optimization using quantum information tools. It encompasses a specific scheme designed for active space optimization (QICAS) and general quantum information-assisted orbital optimization (QIO).
+This project realizes orbital optimization using quantum information tools. It encompasses a specific scheme designed for active space optimization (QICAS) and general quantum information-assisted orbital optimization.
 
 ## Installation
 First clone or download it. Then use 
