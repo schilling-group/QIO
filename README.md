@@ -1,4 +1,4 @@
-# Quantum Information-assisted Active and General Orbital Optimization (QIO)
+# QIO: Quantum Information-assisted Orbital Optimization
 
 ![qio_logo](https://github.com/schilling-group/QIO/assets/79213502/6cca564e-4cd3-47f3-9582-330333fe2b92)
 
