@@ -47,14 +47,14 @@ class Your_Solver:
 When using this package for your work, please cite the following primary references:
 
 **Active space orbital optimization:** 
-* Lexin Ding, Stefan Knecht, Christian Schilling. Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett. 14, 49, 11022–11029 (2023)
+* [Lexin Ding, Stefan Knecht, Christian Schilling. Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett. 14, 49, 11022–11029 (2023)](https://pubs.acs.org/doi/abs/10.1021/acs.jpclett.3c02536)
 
 **Orbital optimization for treating both dynamic and static correlation:** 
-* Ke Liao, Lexin Ding, Christian Schilling. Unveiling Intrinsic Many-Body Complexity by Compressing Single-Body Triviality, arXiv preprint arXiv:2402.16841 (2024)
+* [Ke Liao, Lexin Ding, Christian Schilling. Unveiling Intrinsic Many-Body Complexity by Compressing Single-Body Triviality, arXiv preprint arXiv:2402.16841 (2024)](https://arxiv.org/abs/2402.16841)
 
 Optional further references on quantum information tools in quantum chemistry:
 
-* Lexin Ding, Christian Schilling. Correlation Paradox of the Dissociation Limit: A Quantum Information Perspective. J. Chem. Theory Comput. 16, 7, 4159–4175 (2020)
-* Lexin Ding, Sam Mardazad, Sreetama Das, Zoltán Zimborás, Szilard Szálay, Ulrich Schollwöck, Christian Schilling. Concept of orbital entanglement and correlation in quantum chemistry. J. Chem. Theory Comput. 2021, 17, 1, 79–95 (2020)
-* Lexin Ding, Stefan Knecht, Zoltán Zimborás, Christian Schilling. Quantum correlations in molecules: from quantum resourcing to chemical bonding. Quantum Sci. Technol. 8 015015 (2022)
+* [Lexin Ding, Christian Schilling. Correlation Paradox of the Dissociation Limit: A Quantum Information Perspective. J. Chem. Theory Comput. 16, 7, 4159–4175 (2020)](https://pubs.acs.org/doi/abs/10.1021/acs.jctc.0c00054)
+* [Lexin Ding, Sam Mardazad, Sreetama Das, Zoltán Zimborás, Szilard Szálay, Ulrich Schollwöck, Christian Schilling. Concept of orbital entanglement and correlation in quantum chemistry. J. Chem. Theory Comput. 2021, 17, 1, 79–95 (2020)](https://pubs.acs.org/doi/abs/10.1021/acs.jctc.0c00559)
+* [Lexin Ding, Stefan Knecht, Zoltán Zimborás, Christian Schilling. Quantum correlations in molecules: from quantum resourcing to chemical bonding. Quantum Sci. Technol. 8 015015 (2022)](https://iopscience.iop.org/article/10.1088/2058-9565/aca4ee/meta)
 
