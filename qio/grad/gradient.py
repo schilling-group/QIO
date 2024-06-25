@@ -202,7 +202,7 @@ def minimize_orb_corr_GD(gamma_, Gamma_, inactive_indices, active_indices, step_
         #print("Max grad", np.max(abs(grad)))    
         hess = FQI_hess(gamma0,Gamma0,inactive_indices, active_indices)
         min_hess = np.min((hess[np.abs(hess)>1e-12]))
-        level_shift += min_hess 
+        level_shift = min_hess + 1e-4
 
         denom = hess-level_shift*np.ones((no,no))
         X = -np.divide(grad, denom, out=np.zeros_like(grad), where=np.abs(denom)>1e-12) * step_size 
