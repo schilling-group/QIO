@@ -47,10 +47,10 @@ class Your_Solver:
 When using this package for your work, please cite the following two primary references:
 
 **Active space orbital optimization:** 
-* [Lexin Ding, Stefan Knecht, Christian Schilling. Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett. 14, 49, 11022–11029 (2023)](https://pubs.acs.org/doi/abs/10.1021/acs.jpclett.3c02536)
+* [Lexin Ding, Stefan Knecht, Christian Schilling. Quantum Information-Assisted Complete Active Space Optimization (QICAS), J. Phys. Chem. Lett., 14, 49, 11022–11029 (2023)](https://pubs.acs.org/doi/abs/10.1021/acs.jpclett.3c02536)
 
 **Orbital optimization for treating both dynamic and static correlation:** 
-* [Ke Liao, Lexin Ding, Christian Schilling. Unveiling Intrinsic Many-Body Complexity by Compressing Single-Body Triviality, arXiv preprint arXiv:2402.16841 (2024)](https://arxiv.org/abs/2402.16841)
+* [Ke Liao, Lexin Ding, Christian Schilling. Quantum Information Orbitals (QIO): Unveiling Intrinsic Many-Body Complexity by Compressing Single-Body Triviality, J. Phys. Chem. Lett., 15, 26, 6782–6790 (2024)](https://pubs.acs.org/doi/abs/10.1021/acs.jpclett.4c01105)
 
 Optional further references, introducing and explaining quantum information concepts and tools for quantum chemistry:
 
